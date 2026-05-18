@@ -1180,6 +1180,36 @@ const RUNES = [
     } },
 ];
 
+/* ----- 1b. RUNE TAGS (ability-words + enabler/engine/payoff roles) -----
+   Phase 1 depth layer. Pure metadata: attached to rune objects so combo
+   matchers and (later) relics/archetypes can read structural roles.
+   Roles: enabler -> engine -> payoff -> scaler.
+   Ability-words: attunement (rewards same-element), cascade (rewards being
+   later in the spell), order-dependent (cares about slot position),
+   xmult (multiplicative payoff tier), retrigger/repeat/copy/draw/etc. */
+const RUNE_TAGS = {
+  ember:['payoff','fire'],            drop:['enabler','heal','water'],
+  stone:['payoff','earth'],           gust:['enabler','air','order-dependent'],
+  hollow:['enabler','void','pierce'], ray:['payoff','light'],
+  veil:['enabler','shadow','draw'],   tally:['scaler','order','attunement'],
+  roll:['payoff','chaos','random'],
+  echo:['engine','order','repeat'],   mirror:['engine','chaos','copy'],
+  surge:['engine','fire','mult'],     cascade:['engine','water','cascade'],
+  anchor:['scaler','earth','attunement'], drift:['scaler','air','order-dependent'],
+  drain:['payoff','shadow','lifesteal'], beacon:['engine','light','mult','order-dependent'],
+  sympathy:['engine','void','copy'],
+  ouroboros:['engine','chaos','retrigger','payoff'], twin:['engine','order','repeat'],
+  triskel:['payoff','order','attunement'], wildfire:['payoff','fire','repeat'],
+  tidewall:['scaler','water'],        quake:['payoff','earth','stun'],
+  tempest:['scaler','air','attunement'], eclipse:['enabler','shadow','pierce'],
+  recursion:['engine','order','xmult','attunement'], pandemonium:['payoff','chaos'],
+  singularity:['payoff','void','xmult','scaler'], aurora:['payoff','light','xmult'],
+  // Phase 2 order-dependent XMULT payoff runes:
+  crescendo:['payoff','order','xmult','order-dependent'],
+  culminate:['payoff','void','xmult','order-dependent'],
+};
+RUNES.forEach(r=>{ r.tags = RUNE_TAGS[r.id] || []; });
+
 /* ----- 2. ENEMIES ----- */
 const ENEMIES = [
   // tier 1: introduction. should fall in 2-3 spells.
@@ -1224,6 +1254,31 @@ const NAMED_COMBOS = [
   { id:'twin-first',  match: (rs)=> rs.length>=2 && rs.some(r=>r.id==='twin'), name:'Doubled Prologue' },
   { id:'wildfire',    match: (rs)=> rs.some(r=>r.id==='wildfire') && rs.some(r=>r.id==='surge'), name:'Sun-Up Hex' },
   { id:'ouroboros',   match: (rs)=> rs.some(r=>r.id==='ouroboros'), name:'Tail-Eater' },
+
+  // ---- Phase 1: structural combo graph (tag-based, append-only) ----
+  // Specific first, broad last (findComboName returns first match).
+  { id:'thrice-earth', match:(rs)=> rs.length===3 && rs.every(r=>r.element==='Earth'),  name:'The Sealed Mountain' },
+  { id:'thrice-air',   match:(rs)=> rs.length===3 && rs.every(r=>r.element==='Air'),    name:'The Tempest Verse' },
+  { id:'thrice-void',  match:(rs)=> rs.length===3 && rs.every(r=>r.element==='Void'),   name:'The Unwritten Page' },
+  { id:'thrice-light', match:(rs)=> rs.length===3 && rs.every(r=>r.element==='Light'),  name:'The Gilded Dawn' },
+  { id:'thrice-shadow',match:(rs)=> rs.length===3 && rs.every(r=>r.element==='Shadow'), name:'The Blotted Psalm' },
+  { id:'detonation',   match:(rs)=> rs.some(r=>r.tags.includes('xmult')) && rs.some(r=>r.tags.includes('payoff') && !r.tags.includes('xmult')), name:'Detonation Sigil' },
+  { id:'xmult-stack',  match:(rs)=> rs.filter(r=>r.tags.includes('xmult')).length>=2, name:'Compounding Catastrophe' },
+  { id:'echo-unending',match:(rs)=> rs.some(r=>r.tags.includes('retrigger')) && rs.filter(r=>r.tags.includes('engine')).length>=2, name:'Echo Unending' },
+  { id:'devotion',     match:(rs)=> rs.length===3 && rs.filter(r=>r.tags.includes('attunement')).length>=2 && new Set(rs.map(r=>r.element)).size===1, name:"Devotion's Crown" },
+  { id:'cascade-flood',match:(rs)=> rs.some(r=>r.tags.includes('cascade')) && rs.filter(r=>r.tags.includes('payoff')).length>=2, name:'The Cascading Flood' },
+  { id:'forged-chain', match:(rs)=> rs.length===3 && rs.some(r=>r.tags.includes('enabler')) && rs.some(r=>r.tags.includes('engine')) && rs.some(r=>r.tags.includes('payoff')), name:'The Forged Chain' },
+  { id:'perpetual',    match:(rs)=> rs.filter(r=>r.tags.includes('engine')).length>=3, name:'Perpetual Mechanism' },
+  { id:'hall-mirrors', match:(rs)=> rs.filter(r=>r.tags.includes('copy')).length>=2, name:'Hall of Mirrors' },
+  { id:'repeat-choir', match:(rs)=> rs.filter(r=>r.tags.includes('repeat')).length>=2, name:'The Stuttering Choir' },
+  { id:'unwarded',     match:(rs)=> rs.some(r=>r.tags.includes('pierce')) && rs.some(r=>r.tags.includes('payoff')), name:'Unwarded Strike' },
+  { id:'sustaining',   match:(rs)=> rs.some(r=>r.tags.includes('lifesteal')) && rs.some(r=>r.tags.includes('heal')), name:'The Sustaining Rite' },
+  { id:'discordant',   match:(rs)=> rs.length===3 && new Set(rs.map(r=>r.shape)).size===3 && new Set(rs.map(r=>r.element)).size===3, name:'The Discordant Verse' },
+  { id:'two-mythic',   match:(rs)=> rs.filter(r=>r.rarity==='mythic').length>=2, name:'Mythic Resonance' },
+  { id:'sequenced',    match:(rs)=> rs.filter(r=>r.tags.includes('order-dependent')).length>=2, name:'The Sequenced Inscription' },
+  { id:'compounding',  match:(rs)=> rs.filter(r=>r.tags.includes('scaler')).length>=2, name:'Compounding Glyph' },
+  { id:'engine-pair',  match:(rs)=> rs.filter(r=>r.tags.includes('engine')).length>=2, name:'Geared Inscription' },
+  { id:'attune-pair',  match:(rs)=> rs.length>=2 && new Set(rs.filter(Boolean).map(r=>r.element)).size===1, name:'Resonant Pair' },
 ];
 
 function findComboName(spellRunes){
