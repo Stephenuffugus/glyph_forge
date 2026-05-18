@@ -1178,6 +1178,12 @@ const RUNES = [
       const unique = new Set(els);
       if(unique.size === 3) ctx.globalMult *= 5;
     } },
+
+  // ---------- Phase 2: order-dependent XMULT payoffs (place LAST) ----------
+  { id:'crescendo',  name:'Crescendo',  element:'Order',  shape:'Chain',  basePower:0, rarity:'rare',   glyph:'⋰', xmultScale:0.06,
+    desc:'XMULT ×(1 + 6% of all power inscribed before it). Reward for going last.' },
+  { id:'culminate',  name:'Culminate',  element:'Void',   shape:'Burst',  basePower:0, rarity:'mythic', glyph:'⤢', xmultScale:0.11,
+    desc:'XMULT ×(1 + 11% of all power inscribed before it). The final word.' },
 ];
 
 /* ----- 1b. RUNE TAGS (ability-words + enabler/engine/payoff roles) -----
@@ -1448,6 +1454,7 @@ function resolveSpell(){
     runes: runeObjs,
     runeMod: runeObjs.map(()=>({ mult:1, add:0, repeats:1, lifesteal:0 })),
     globalMult: 1,
+    xmult: 1,          // Phase 2: multiplicative payoff track (synergy + order-dependent runes)
     healSelf: 0,
     bonusDraw: 0,
     spellRetrigger: 0,
@@ -1482,26 +1489,34 @@ function resolveSpell(){
   const elementCounts = {};
   ctx.runes.forEach(r=>{ if(r) elementCounts[r.element] = (elementCounts[r.element]||0)+1; });
   const maxEl = Math.max(0, ...Object.values(elementCounts));
-  const elementMult = maxEl >= 2 ? 1 + (maxEl-1) * 0.5 : 1;
+  // Phase 2: synergy is now EXPONENTIAL and feeds the XMULT track, so
+  // committing to one element/shape scales multiplicatively (build identity).
+  const elementMult = maxEl >= 3 ? 3.0 : maxEl === 2 ? 1.6 : 1;
 
   // shape resonance
   const shapeCounts = {};
   ctx.runes.forEach(r=>{ if(r) shapeCounts[r.shape] = (shapeCounts[r.shape]||0)+1; });
   const maxSh = Math.max(0, ...Object.values(shapeCounts));
-  const shapeMult = maxSh >= 2 ? 1 + (maxSh-1) * 0.25 : 1;
+  const shapeMult = maxSh >= 3 ? 2.0 : maxSh === 2 ? 1.3 : 1;
 
-  ctx.globalMult *= elementMult * shapeMult;
+  ctx.xmult *= elementMult * shapeMult;
 
   // damage tally
   let totalDamage = 0;
   let totalLifesteal = 0;
+  let _baseBefore = 0;   // Phase 2: power assembled in EARLIER slots (order matters)
   const _tr = [];
   ctx.runes.forEach((r,i)=>{
     if(!r) return;
     const mod = ctx.runeMod[i];
+    // Order-dependent XMULT: a rune's payoff scales off everything inscribed
+    // before it, so placement (slot I/II/III) is a skill expression.
+    if(r.xmultScale) ctx.xmult *= 1 + _baseBefore * r.xmultScale;
+    if(r.xmultFlat)  ctx.xmult *= r.xmultFlat;
     const perRune = (r.basePower + mod.add) * mod.mult;
     const repeatedDmg = perRune * Math.max(1, mod.repeats);
     totalDamage += repeatedDmg;
+    _baseBefore += repeatedDmg;
     if(mod.lifesteal > 0) totalLifesteal += repeatedDmg * mod.lifesteal;
     _tr.push({ id:r.id, name:r.name, base:r.basePower, add:mod.add, mult:mod.mult, repeats:Math.max(1,mod.repeats), sub:repeatedDmg });
   });
@@ -1511,6 +1526,7 @@ function resolveSpell(){
   const _baseSum = totalDamage;
 
   totalDamage *= ctx.globalMult;
+  totalDamage *= ctx.xmult;            // Phase 2: the multiplicative payoff track
   const _spellRetrigger = ctx.spellRetrigger;
   if(ctx.spellRetrigger > 0) totalDamage *= (1 + ctx.spellRetrigger);
 
@@ -1533,13 +1549,14 @@ function resolveSpell(){
     ignoreWard: ctx.ignoreWard,
     elementMult, shapeMult,
     globalMult: ctx.globalMult,
+    xmult: ctx.xmult,
     fluencyMult,
     comboMatch,
     presentRunes: present,
-    crit: elementMult * shapeMult >= 2,
+    crit: ctx.xmult * ctx.globalMult >= 3,
     trace: { perRune:_tr, pandemoniumBonus, baseSum:_baseSum, elementMult, shapeMult,
-             globalMult:ctx.globalMult, spellRetrigger:_spellRetrigger, fluencyMult,
-             preFloor:_preFloor, final:totalDamage },
+             globalMult:ctx.globalMult, xmult:ctx.xmult, spellRetrigger:_spellRetrigger,
+             fluencyMult, preFloor:_preFloor, final:totalDamage },
   };
 }
 
@@ -2294,9 +2311,9 @@ window.GLYPH_FORGE = { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell };
     const tr=res.trace;
     let s=tr.perRune.map(p=>`${(p.name||'').padEnd(12)} (${p.base}+${p.add})×${fmt(p.mult)}×${p.repeats} = ${fmt(p.sub)}`).join('\n');
     if(tr.pandemoniumBonus) s+=`\n+ pandemonium hand   = ${tr.pandemoniumBonus}`;
-    s+=`\nbase sum             = ${fmt(tr.baseSum)}`;
-    s+=`\n× element synergy    ×${fmt(tr.elementMult)}`;
-    s+=`\n× shape resonance    ×${fmt(tr.shapeMult)}`;
+    s+=`\nPOWER (base sum)     = ${fmt(tr.baseSum)}`;
+    if(tr.globalMult!==1) s+=`\n× global mult        ×${fmt(tr.globalMult)}`;
+    s+=`\n× XMULT              ×${fmt(tr.xmult)}   (elem ×${fmt(tr.elementMult)} · shape ×${fmt(tr.shapeMult)} · order)`;
     if(tr.spellRetrigger) s+=`\n× retrigger          ×${fmt(1+tr.spellRetrigger)}`;
     s+=`\n× fluency            ×${fmt(tr.fluencyMult)}`;
     s+=`\n= ${fmt(tr.preFloor)}  →  FINAL ${tr.final}`;

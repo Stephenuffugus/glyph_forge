@@ -34,70 +34,77 @@ HP scales: `baseHp × (1 + encounterIdx × 0.05)`. At encounter 12 (boss): ×1.6
 |---|---|---|---|---|
 | common   | 9 | 1–3 | minor or none | Stone (3) |
 | uncommon | 9 | 0–2 | modifier (multiplier or repeat) | Surge (+50% neighbor) |
-| rare     | 8 | 0–5 | strong conditional or scaling | Anchor, Pandemonium |
-| mythic   | 4 | 0   | game-bending global effect | Singularity (× hand size) |
+| rare     | 9 | 0–5 | strong conditional or scaling | Anchor; Crescendo (XMULT) |
+| mythic   | 5 | 0   | game-bending global/XMULT effect | Singularity; Culminate (XMULT) |
 
-Element distribution: Fire 3 · Water 3 · Earth 3 · Air 3 · Void 3 · Light 3 · Shadow 3 · Order 5 · Chaos 4
-Shape distribution: Bolt 2 · Wave 4 · Burst 4 · Pulse 4 · Sigil 7 · Spiral 6 · Chain 3
+32 runes total (Phase 2 added **Crescendo** rare + **Culminate** mythic — order-dependent XMULT payoffs).
+Element distribution: Fire 3 · Water 3 · Earth 3 · Air 3 · Void 4 · Light 3 · Shadow 3 · Order 6 · Chaos 4
+Shape distribution: Bolt 2 · Wave 4 · Burst 5 · Pulse 4 · Sigil 7 · Spiral 6 · Chain 4
 
-## Synergy Math
+## Synergy Math — Phase 2 two-track engine
+
+Slots resolve **left → right (I → II → III); order matters.** Damage splits into
+an additive POWER track and a multiplicative XMULT track.
 
 ```
-elementMult = 1 + (maxSameElementCount - 1) × 0.5    // 3-stack = ×2.0
-shapeMult   = 1 + (maxSameShapeCount   - 1) × 0.25   // 3-stack = ×1.5
-fluencyMult = 1 + min(0.72, defeatedEnemies × 0.06)  // caps at ×1.72
-globalMult  = elementMult × shapeMult × (effect modifiers)
-totalDamage = floor( Σ(perRuneDamage) × globalMult × (1 + spellRetrigger) × fluencyMult )
+POWER       = Σ ( (basePower + add) × runeMult × repeats )   // additive, per slot in order
+elementMult = maxSameElement≥3 ? 3.0 : maxSameElement===2 ? 1.6 : 1     // EXPONENTIAL
+shapeMult   = maxSameShape≥3   ? 2.0 : maxSameShape===2   ? 1.3 : 1
+xmult       = elementMult × shapeMult × Π(order-dependent rune xmults)
+              // order-dependent rune: xmult ×= 1 + (POWER assembled in EARLIER slots) × scale
+              //   Crescendo scale 0.06 · Culminate scale 0.11  → reward placing them last
+globalMult  = effect modifiers (ray/triskel/recursion/singularity/aurora …)
+fluencyMult = 1 + min(0.72, defeatedEnemies × 0.06)          // caps at ×1.72
+totalDamage = floor( POWER × globalMult × xmult × (1 + spellRetrigger) × fluencyMult )
 ```
 
-Example: Stone + Stone + Stone, fluency 0 (3× Earth, 3× Burst)
-- Base: 3 × 3 = 9
-- elementMult: 2.0, shapeMult: 1.5, fluencyMult: 1.0
-- Final: 9 × 2.0 × 1.5 × 1.0 = **27**
-
-Same combo after defeating 8 enemies (fluencyMult 1.48):
-- 9 × 2.0 × 1.5 × 1.48 = **39**
+Baseline (no synergy, no XMULT runes) is **byte-identical to pre-Phase-2** —
+only focused/ordered play scales. Example: Stone + Stone + Stone, fluency 0
+(3× Earth, 3× Burst): POWER 9 → ×3.0 (elem) ×2.0 (shape) = **54** (was 27 —
+mono-element/shape now scales exponentially: this is the build-identity payoff).
 
 ## Damage Reference (validated by `test.js`)
 
 | Spell | Damage (fluency 0) | Notes |
 |---|---|---|
-| Stone (alone) | 3 | baseline |
-| Ember + Ember + Ember | 18 | 3-elem, 3-shape (Bolt) at ×3.0 |
-| Stone + Stone + Stone | 27 | 3-elem, 3-shape (Burst) at ×3.0 |
-| Stone + Echo | 6 | Echo doubles Stone's repeat |
-| Stone + Echo + Echo | 11 | 2 Sigil resonance + 2 Order synergy |
-| Stone + Twin | 9 | Twin gives +2 repeats to slot 0 |
-| Ember + Surge + Ember | 20 | Surge buffs both neighbors +50% |
-| Ember + Drop + Aurora | 15 | Aurora ×5 for 3 different elements |
-| Ember + Singularity (hand=5) | 10 | base 2 × hand 5 |
-| Ember + Singularity (hand=10) | 20 | base 2 × hand 10 |
-| Recursion + Ember + Recursion | 33 | 2-stack Recursion = ×3, plus synergies |
-| Ember + Ouroboros | 4 | spell casts twice (×2) |
-| Tally + Tally + Triskelion | 82 | 3-Order all same → Triskel ×3 + synergies |
-| **Singularity × 2 + Wildfire (hand=10)** | **1125** | the original broken combo |
-| **Pandemonium + Singularity × 2 (hand=10)** | **3750** | the deepest broken combo found |
+| Stone (alone) | 3 | baseline — unchanged from pre-Phase-2 |
+| Stone + Echo | 6 | no synergy → identical to old engine |
+| Ember + Ember + Ember | 36 | 3-elem ×3.0 · 3-Bolt ×2.0 (was 18) |
+| Stone + Stone + Stone | 54 | 3-Earth ×3.0 · 3-Burst ×2.0 (was 27) |
+| Stone + Echo + Echo | 12 | 2-Sigil ×1.3 · 2-Order ×1.6 |
+| Stone + Twin | 9 | Twin +2 repeats slot 0, no synergy |
+| Ember + Surge + Ember | 31 | Surge +50% neighbors + 2-Fire/2-Bolt XMULT |
+| Ember + Drop + Aurora | 15 | Aurora globalMult ×5, no same-element |
+| Ember + Singularity (hand=8) | 16 | base 2 × hand 8 (globalMult path intact) |
+| Recursion + Ember + Recursion | 37 | 2-stack Recursion ×3 + 2-Order/2-Spiral XMULT |
+| Ember + Ouroboros | 4 | spell re-casts once (×2) |
+| Tally + Tally + Triskelion | 128 | 3-Order all same → Triskel ×3 × XMULT 6.0 |
+| Tidewall @ 5/30 HP | 26 | +1 per missing HP, no synergy |
+| **Pandemonium + Singularity × 2 (hand=10)** | **4160** | the deepest broken combo (was 3750) |
 
-Same broken combo at fluency 1.72 (post-game): ~1935 damage.
+Mono-element/shape builds roughly **doubled**; the absolute mythic ceiling rose
+~11%. Non-synergy spells are unchanged — depth is opt-in, paid for with focus.
 
 ## Win Rate Tests (synergy-aware greedy AI, 100 runs)
 
 ```
-Win rate: 37/100 (37%)
-Avg damage per spell: 19.7
-Avg peak spell damage per run: 132 (max seen: 1225)
-Avg total turns per run: 47
+Win rate: 41/100 (41%)   [pre-Phase-2 baseline: 37%]
+Avg damage per spell: 23.7
+Avg peak spell damage per run: 207.6 (max seen: 2673)
+Avg total turns per run: 45.6
 
 Loss distribution by encounter:
-   8: ████        (4)  first tier-3
-   9: ███████     (7)
-  10: ████████    (8)
-  11: █████████   (9)
-  12: ███████████████████████████████████   (35) — The Sovereign
-  13: WIN ████████████████████████████████████ (37)
+   8: █        (1)
+   9: ████     (4)
+  10: ██       (2)
+  11: ████     (4)
+  12: ████████████████████████████████████████████████  (48) — The Sovereign
+  13: WIN █████████████████████████████████████████ (41)
 ```
 
-The Sovereign is the dominant wall (35/63 losses occur there). This is correct — it should feel like a boss. Skilled human play with intentional deck-building and reward routing should hit 55–70%.
+The Sovereign is still the dominant wall (48/59 losses occur there) — curve
+shape preserved, just a higher ceiling. Greedy AI 41% → skilled human play with
+intentional focus/ordering and reward routing should hit ~60–72%.
 
 ## Tuning Levers (in order of impact)
 
@@ -107,9 +114,10 @@ If win rate feels off post-launch, change in this order:
 2. **Fluency rate** (`0.06` per win — bump to `0.08` for steeper curve, drop to `0.04` for harder)
 3. **Player max HP** (50 → 60 for more forgiving mid-game)
 4. **Between-encounter heal** (+8 → +10 for more sustain)
-5. **Synergy multipliers** (0.5 elem / 0.25 shape — flatter curve if dropped)
+5. **XMULT synergy curve** (`elementMult` 1.6/3.0 · `shapeMult` 1.3/2.0 in resolveSpell — lower the 3-stack values to flatten the build-identity payoff)
+6. **Order-dependent scales** (`Crescendo` 0.06 / `Culminate` 0.11 `xmultScale` — these set the combo ceiling; raise/lower with care)
 
-DO NOT touch the mythic rune effects without re-running `sim-run.js`. They define the ceiling and a small change there cascades through the whole damage range.
+DO NOT touch mythic rune effects or the XMULT curve without re-running `sim-run.js`. They define the ceiling and small changes cascade through the whole damage range. The forthcoming counter-boss (design Phase 6) — not an HP bump — is the intended lever for boss difficulty.
 
 ## Variance Analysis
 
