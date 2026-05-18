@@ -207,6 +207,7 @@
 
   .hud {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px 8px;
@@ -244,6 +245,8 @@
   /* ----- Enemy region ----- */
   .enemy-stage {
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -262,7 +265,9 @@
     text-align: center;
   }
   .enemy-portrait {
-    width: 180px; height: 180px;
+    width: clamp(96px, 22vh, 180px);
+    height: clamp(96px, 22vh, 180px);
+    flex-shrink: 0;
     border-radius: 50%;
     background: var(--ink-warm);
     border: 1px solid var(--crimson-dk);
@@ -280,7 +285,7 @@
   }
   .enemy-portrait.placeholder::after {
     content: '⌬';
-    font-size: 90px;
+    font-size: clamp(48px, 12vh, 90px);
     color: var(--crimson);
     text-shadow: 0 0 30px var(--crimson);
   }
@@ -359,6 +364,7 @@
 
   /* ----- Spell slots ----- */
   .spell-area {
+    flex-shrink: 0;
     padding: 12px 16px;
     background: var(--ink-mid);
     border-top: 1px solid rgba(212,168,73,0.15);
@@ -416,13 +422,13 @@
 
   /* ----- Hand area ----- */
   .hand-area {
+    flex-shrink: 0;
     padding: 12px 12px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
     background: var(--ink-deep);
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-height: 200px;
+    min-height: 0;
   }
   .hand-label {
     display: flex; justify-content: space-between; align-items: center;
@@ -540,6 +546,7 @@
   /* ----- Cast button ----- */
   .cast-row {
     display: flex; gap: 8px;
+    flex-shrink: 0;
     padding: 8px 16px 12px;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
     background: var(--ink-deep);
@@ -2149,7 +2156,7 @@ window.GLYPH_FORGE = { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell };
   if(!GF_DEV) return;
 
   const css=`
-  #gf-badge{position:fixed;left:8px;bottom:8px;z-index:99998;font:11px/1 monospace;
+  #gf-badge{position:fixed;left:2px;top:50%;transform:translateY(-50%);z-index:99998;font:10px/1 monospace;
    color:#d4a849;background:rgba(10,7,5,.8);border:1px solid #5a4a2e;border-radius:4px;
    padding:5px 8px;cursor:pointer;opacity:.5;letter-spacing:.08em;user-select:none}
   #gf-badge:hover{opacity:1}
