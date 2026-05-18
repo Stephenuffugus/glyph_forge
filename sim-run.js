@@ -13,10 +13,11 @@ const stubs = `
   const confirm = ()=>true;
 `;
 
-const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName };})()`);
+const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, onSpellBound, ensureRunDepth, RELICS, SIGILS, CHAMPIONS, TRANSMUTATIONS };})()`);
 
 // Replicate run logic locally so we don't need DOM-touching functions
-function newSim(seedStr){
+function newSim(seedStr, sigilId){
+  const sg = (game.SIGILS||[]).find(s=>s.id===sigilId) || (game.SIGILS||[{id:'free',maxHp:50}])[0];
   const seed = (function(){
     let h = 1779033703 ^ seedStr.length;
     for(let i=0;i<seedStr.length;i++){
@@ -40,10 +41,15 @@ function newSim(seedStr){
   }
   return {
     seed: seedStr, rngSeed: seed,
-    encounterIdx: 0, hp: 50, maxHp: 50,
+    encounterIdx: 0, hp: sg.maxHp||50, maxHp: sg.maxHp||50,
     deck, hand: [], discard: [], spell: [null,null,null],
     path, enemyHp: 0, enemyMaxHp: 0,
     fluency: 0,
+    // depth (mirror startNewRun)
+    sigil: sg.id, relics: [],
+    champion: sg.champion ? { id: sg.champion, level:1, path:0 } : null,
+    progression: { bound:[], revealed:[], prophecy:null, transmuted:[] },
+    boundElements: [], castCount: 0,
     log: []
   };
 }
@@ -117,6 +123,9 @@ function sim(run){
 function applyCast(run){
   const result = sim(run);
   if(!result) return null;
+  // mirror cast(): bind elements, fire transmutations/prophecy, advance counter
+  if(game.onSpellBound) try{ game.onSpellBound(run, result.presentRunes||[], result); }catch(e){}
+  run.castCount = (run.castCount||0) + 1;
   run.enemyHp = Math.max(0, run.enemyHp - result.damage);
   if(result.healing) run.hp = Math.min(run.maxHp, run.hp + result.healing);
 
@@ -150,6 +159,11 @@ function rewardChoice(run){
   if(run.encounterIdx < 4) pool = game.RUNES.filter(r=>r.rarity==='common'||r.rarity==='uncommon');
   else if(run.encounterIdx < 9) pool = game.RUNES.filter(r=>r.rarity==='uncommon'||r.rarity==='rare');
   else pool = game.RUNES.filter(r=>r.rarity==='rare'||r.rarity==='mythic');
+  // Phase 5 progressive reveal: deep runes need their element bound this run
+  const sg = (game.SIGILS||[]).find(s=>s.id===run.sigil);
+  const bound = new Set([...(run.boundElements||[]), sg&&sg.element].filter(Boolean));
+  pool = pool.filter(r => (r.rarity==='common'||r.rarity==='uncommon') || bound.has(r.element));
+  if(pool.length < 3) pool = game.RUNES.filter(r=>r.rarity==='common'||r.rarity==='uncommon');
   const rng = game.mulberry32(run.rngSeed + run.encounterIdx*31);
   const offered = [];
   while(offered.length < 3 && pool.length > 0){
@@ -183,8 +197,8 @@ function rewardChoice(run){
   return picked;
 }
 
-function runOne(seedStr){
-  const run = newSim(seedStr);
+function runOne(seedStr, sigilId){
+  const run = newSim(seedStr, sigilId);
   beginEnc(run);
   let turnLimit = 200;
   while(turnLimit-- > 0){
@@ -206,7 +220,20 @@ function runOne(seedStr){
     if(run.enemyHp <= 0){
       run.log.push(`  >> defeated ${game.ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId).name}`);
       run.fluency += 1;
-      rewardChoice(run);
+      // mirror showRewardModal branching: champion -> relic -> rune
+      if(run.champion && (run.encounterIdx===3 || run.encounterIdx===7)){
+        run.champion.level = (run.champion.level||1) + 1;
+        run.log.push(`  champion -> lvl ${run.champion.level}`);
+      } else if([2,5,9].includes(run.encounterIdx)){
+        const owned = new Set(run.relics);
+        let rp = (game.RELICS||[]).filter(x=>!x.hidden && !owned.has(x.id) && (x.rarity!=='mythic' || (game.state.meta.runsCompleted||0)>=1));
+        const rank = { mythic:4, rare:3, uncommon:2, common:1 };
+        rp.sort((a,b)=>(rank[b.rarity]||0)-(rank[a.rarity]||0));
+        if(rp[0]){ run.relics.push(rp[0].id); run.log.push(`  relic: ${rp[0].name}`); }
+        else rewardChoice(run);
+      } else {
+        rewardChoice(run);
+      }
       run.encounterIdx += 1;
       if(run.encounterIdx >= 13){
         run.log.push(`*** VICTORY *** in run "${seedStr}"`);
@@ -221,54 +248,45 @@ function runOne(seedStr){
   return run;
 }
 
-// Run multiple seeds and aggregate
+// Per-Sigil balance battery (Phase 3-6 validation). Each Sigil plays the
+// full 100-run AI battery; we flag any build that's trivially easy or
+// impossibly hard so the depth power can be tuned with evidence.
 const NUM_RUNS = 100;
-console.log(`Running ${NUM_RUNS} simulated playthroughs with synergy-aware greedy AI...`);
-let wins = 0, losses = 0;
-const lossEncounters = {};
-const reachedHistogram = {};
-let totalDmgsAll = [];
-let peakDmgPerRun = [];
-let turnsPerRun = [];
-let runesAcquired = [];
-for(let i=0;i<NUM_RUNS;i++){
-  const run = runOne('sim-'+i);
-  if(run.encounterIdx >= 13){
-    wins++;
-  } else {
-    losses++;
-    lossEncounters[run.encounterIdx] = (lossEncounters[run.encounterIdx]||0)+1;
-  }
-  reachedHistogram[run.encounterIdx] = (reachedHistogram[run.encounterIdx]||0)+1;
-  const dmgs = run.log.filter(l=>l.includes('dmg=')).map(l=>{
-    const m = l.match(/dmg=(\d+)/); return m ? parseInt(m[1]) : 0;
-  });
-  totalDmgsAll = totalDmgsAll.concat(dmgs);
-  peakDmgPerRun.push(Math.max(0, ...dmgs));
-  turnsPerRun.push(dmgs.length);
-  runesAcquired.push(run.deck.length + run.discard.length + run.hand.length);
-}
-const winPct = (wins/NUM_RUNS*100);
-const avgDmg = totalDmgsAll.length ? (totalDmgsAll.reduce((a,b)=>a+b,0)/totalDmgsAll.length).toFixed(1) : 0;
-const peakAvg = (peakDmgPerRun.reduce((a,b)=>a+b,0)/peakDmgPerRun.length).toFixed(1);
-const peakMax = Math.max(...peakDmgPerRun);
-const avgTurns = (turnsPerRun.reduce((a,b)=>a+b,0)/turnsPerRun.length).toFixed(1);
+const SIGIL_IDS = (game.SIGILS||[{id:'free'}]).map(s=>s.id);
+console.log(`Running ${NUM_RUNS} AI playthroughs per Sigil (${SIGIL_IDS.join(', ')})...\n`);
 
-console.log(`\n=== AGGREGATE ===`);
-console.log(`Win rate: ${wins}/${NUM_RUNS} (${winPct.toFixed(1)}%)`);
-console.log(`Avg damage per spell: ${avgDmg}`);
-console.log(`Avg peak spell damage per run: ${peakAvg}  (max seen: ${peakMax})`);
-console.log(`Avg total turns per run: ${avgTurns}`);
-console.log(`Avg deck size at end: ${(runesAcquired.reduce((a,b)=>a+b,0)/runesAcquired.length).toFixed(1)}`);
-console.log(`\nReached histogram (encounter idx → count):`);
-for(let i=0;i<=13;i++){
-  if(reachedHistogram[i]){
-    const bar = '█'.repeat(reachedHistogram[i]);
-    console.log(`  ${String(i).padStart(2)}: ${bar} (${reachedHistogram[i]})`);
+function battery(sigilId){
+  let wins=0; const lossEnc={}; let peak=[]; let dmgs=[];
+  for(let i=0;i<NUM_RUNS;i++){
+    const run = runOne('sim-'+i, sigilId);
+    if(run.encounterIdx >= 13) wins++;
+    else lossEnc[run.encounterIdx] = (lossEnc[run.encounterIdx]||0)+1;
+    const ds = run.log.filter(l=>l.includes('dmg=')).map(l=>{ const m=l.match(/dmg=(\d+)/); return m?+m[1]:0; });
+    dmgs = dmgs.concat(ds); peak.push(Math.max(0,...ds));
   }
+  return {
+    sigilId, wins,
+    pct: wins/NUM_RUNS*100,
+    bossLoss: lossEnc[12]||0,
+    avgDmg: dmgs.length ? dmgs.reduce((a,b)=>a+b,0)/dmgs.length : 0,
+    peakMax: Math.max(...peak),
+    lossEnc,
+  };
 }
-console.log(`\nLosses by encounter:`, lossEncounters);
 
-console.log('\nSample run final 25 lines (sim-7):');
-const r0 = runOne('sim-7');
-r0.log.slice(-25).forEach(l => console.log(l));
+const results = SIGIL_IDS.map(battery);
+console.log('=== PER-SIGIL WIN RATE (greedy AI, 100 runs each) ===');
+results.forEach(r=>{
+  const flag = r.pct>70 ? '  ⚠ TOO EASY' : r.pct<15 ? '  ⚠ TOO HARD' : '';
+  console.log(`  ${r.sigilId.padEnd(7)} ${String(r.wins).padStart(3)}/100 (${r.pct.toFixed(0)}%)  bossLosses=${r.bossLoss}  avgDmg=${r.avgDmg.toFixed(1)}  peakMax=${r.peakMax}${flag}`);
+});
+const overall = results.reduce((a,r)=>a+r.wins,0) / (results.length*NUM_RUNS) * 100;
+console.log(`\nOverall win rate: ${overall.toFixed(1)}%   [healthy band 30-55% greedy AI]`);
+const easy = results.filter(r=>r.pct>70), hard = results.filter(r=>r.pct<15);
+if(easy.length) console.log(`⚠ Trivial Sigils: ${easy.map(r=>r.sigilId).join(', ')} — nerf their boon/curated pool`);
+if(hard.length) console.log(`⚠ Brutal Sigils:  ${hard.map(r=>r.sigilId).join(', ')} — the seal is too costly`);
+if(!easy.length && !hard.length) console.log(`✓ All Sigils inside the healthy band — depth power is balanced.`);
+
+// Win rate for the default 'free' Sigil = the Phase-2 regression baseline.
+const free = results.find(r=>r.sigilId==='free');
+if(free) console.log(`\nBaseline (Free Inscription): ${free.pct.toFixed(1)}%  (Phase-2 reference ~37-41%)`);

@@ -85,7 +85,28 @@ mono-element/shape now scales exponentially: this is the build-identity payoff).
 Mono-element/shape builds roughly **doubled**; the absolute mythic ceiling rose
 ~11%. Non-synergy spells are unchanged — depth is opt-in, paid for with focus.
 
-## Win Rate Tests (synergy-aware greedy AI, 100 runs)
+## Per-Sigil Balance Battery (greedy AI, 100 runs each — `node sim-run.js`)
+
+The sim now plays the full depth stack (Sigil, curated pool, relics taken at
+enc 3/6/10, champion levels at 4/8, bind-reveal, counter-boss). Validated band:
+
+```
+  free     47/100 (47%)  peakMax 1559   neutral baseline (relics only, no identity)
+  ember    45/100 (45%)  peakMax  543   Fire aggro — steady, low ceiling, Water sealed
+  order    46/100 (46%)  peakMax 2027   symmetry/combo — highest ceiling, Chaos sealed
+  void     48/100 (48%)  peakMax  964   sustain — highest avg dmg, 38 HP, Light sealed
+  Overall 46.5%  [healthy greedy-AI band 30-55%; ~60-68% expected for skilled humans]
+```
+
+Sigils are intentionally clustered (~45-48%) but **differentiated by profile**,
+not power: `order` is the high-variance ceiling build, `ember` the consistent
+floor, `void` the grindy sustain. `sim-run.js` auto-flags any Sigil >70% (nerf)
+or <15% (the seal is too costly). Re-run after any RELIC/SIGIL/CHAMPION change.
+
+This was caught by the sim: the first cut shipped Sigils at 72-97% (trivially
+easy). Boons/champions/curated-pool were recosted until the band held.
+
+## Legacy Win Rate Reference (bare-run greedy AI, pre-depth)
 
 ```
 Win rate: 41/100 (41%)   [pre-Phase-2 baseline: 37%]

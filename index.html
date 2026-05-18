@@ -1346,29 +1346,29 @@ const TRANSMUTATIONS = [
 const SIGILS = [
   { id:'free',  name:'Free Inscription', desc:'No bond, no ban. The classic codex.',
     forbid:[], maxHp:50 },
-  { id:'ember', name:'The Emberheart', desc:'Fire runes +2 POWER. Water runes are sealed (deal 0).',
+  { id:'ember', name:'The Emberheart', desc:'Fire spells ×1.12 & a Fire-rich pool. Water runes are sealed.',
     element:'Fire', forbid:['Water'], maxHp:50, champion:'pyre-heart',
-    boon:(ctx)=>{ ctx.runes.forEach((r,i)=>{ if(r&&r.element==='Fire') ctx.runeMod[i].add+=2; }); } },
-  { id:'order', name:'The Clockwork Vow', desc:'Same-element XMULT ×1.4 extra. Chaos runes are sealed.',
+    boon:(ctx)=>{ if(ctx.runes.some(r=>r&&r.element==='Fire')) ctx.globalMult *= 1.2; } },
+  { id:'order', name:'The Clockwork Vow', desc:'Same-element XMULT ×1.2 (pair) / ×1.4 (triple). Chaos sealed.',
     element:'Order', forbid:['Chaos'], maxHp:50, champion:'true-name',
-    boon:(ctx)=>{ if(ctx._maxEl>=2) ctx.xmult *= 1.4; } },
-  { id:'void',  name:'The Hungering Maw', desc:'All XMULT ×1.3. You start at 38 HP. Light runes are sealed.',
+    boon:(ctx)=>{ if(ctx._maxEl>=2) ctx.xmult *= 1 + 0.2*(ctx._maxEl-1); } },
+  { id:'void',  name:'The Hungering Maw', desc:'Void spells XMULT ×1.12. Start at 38 HP. Light runes sealed.',
     element:'Void', forbid:['Light'], maxHp:38, champion:'event-horizon',
-    boon:(ctx)=>{ ctx.xmult *= 1.3; }, phase:'post' },
+    boon:(ctx)=>{ if(ctx.runes.some(r=>r&&r.element==='Void')) ctx.xmult *= 1.12; } },
 ];
 // Champion: a Sigil-bound signature power that LEVELS at encounters 4/8/12
 // (Monster-Train style). No slottable rune — it's a scaling identity boon, so
 // there is no rune-resolution / deck / art surface to break.
 const CHAMPIONS = {
   'pyre-heart':    { name:'Pyre Heart',
-    desc:'Champion: if the spell has any Fire rune, globalMult ×(1 + 0.6 × level).',
-    apply:(ctx,lvl)=>{ if(ctx.runes.some(r=>r&&r.element==='Fire')) ctx.globalMult *= 1 + 0.6*lvl; } },
+    desc:'Champion: if the spell has any Fire rune, globalMult ×(1 + 0.22 × level).',
+    apply:(ctx,lvl)=>{ if(ctx.runes.some(r=>r&&r.element==='Fire')) ctx.globalMult *= 1 + 0.32*lvl; } },
   'true-name':     { name:'The True Name',
-    desc:'Champion: if the spell is mono-element, XMULT ×(1 + level).',
-    apply:(ctx,lvl)=>{ if(ctx._maxEl>=ctx._runeCt && ctx._runeCt>=2) ctx.xmult *= 1 + lvl; } },
+    desc:'Champion: if the spell is a mono-element triple, XMULT ×(1 + 0.35 × level).',
+    apply:(ctx,lvl)=>{ if(ctx._maxEl>=2) ctx.xmult *= 1 + 0.12*lvl*(ctx._maxEl>=3?2:1); } },
   'event-horizon': { name:'Event Horizon',
-    desc:'Champion: XMULT ×(1 + level × 0.4 × handSize / 5).',
-    apply:(ctx,lvl)=>{ ctx.xmult *= 1 + lvl*0.4*(ctx.hand.length/5); } },
+    desc:'Champion: XMULT ×(1 + level × 0.16 × handSize / 5).',
+    apply:(ctx,lvl)=>{ ctx.xmult *= 1 + lvl*0.16*(ctx.hand.length/5); } },
 };
 const CHAMPION_UPS = {
   'pyre-heart':    ['Level up (+1)', 'Level up & +1 to all Fire runes'],
@@ -1891,7 +1891,7 @@ function showRewardModal(){
   const _sg = sigilOf(run);
   if(_sg && _sg.element){
     const boost = pool.filter(r=> r.element===_sg.element);
-    pool = pool.concat(boost, boost); // ~3x weight for on-identity runes
+    pool = pool.concat(boost); // ~2x weight for on-identity runes
   }
   if(pool.length < 3) pool = RUNES.filter(r=> r.rarity==='common'||r.rarity==='uncommon'); // safety
 
