@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0d0a08" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Glyph Forge</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=IM+Fell+English:ital@0;1&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     GLYPH FORGE — Aesthetic: illuminated manuscript / dark codex
+     Palette locked. Edit CSS vars to retheme.
+     ============================================================ */
+  :root {
+    --ink-deep:     #0a0705;
+    --ink-mid:      #14100b;
+    --ink-warm:     #1f1810;
+    --parchment:    #e8dcc3;
+    --parchment-dk: #c9b896;
+    --parchment-sh: #8a7a5e;
+    --gilt:         #d4a849;
+    --gilt-bright:  #f0c46a;
+    --verdigris:    #5a8d6a;
+    --crimson:      #a83232;
+    --crimson-dk:   #6b1d1d;
+    --violet:       #6b4d8c;
+    --vellum:       #f4e8d0;
+    --shadow:       rgba(0,0,0,0.65);
+    --grain:        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.85  0 0 0 0 0.78  0 0 0 0 0.6  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: var(--ink-deep);
+    color: var(--parchment);
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 16px;
+    line-height: 1.4;
+    overflow: hidden;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at top, rgba(212,168,73,0.08), transparent 60%),
+      radial-gradient(ellipse at bottom, rgba(107,77,140,0.06), transparent 70%),
+      var(--ink-deep);
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: var(--grain);
+    opacity: 0.5;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    z-index: 1;
+  }
+
+  #app {
+    position: relative;
+    width: 100vw; height: 100vh;
+    height: 100dvh;
+    max-width: 540px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    z-index: 2;
+  }
+
+  /* ============ SCREENS ============ */
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ============ TITLE SCREEN ============ */
+  #title-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    text-align: center;
+  }
+  .title-mark {
+    width: 200px; height: 200px;
+    margin-bottom: 24px;
+    background: var(--ink-mid);
+    border: 1px solid var(--gilt);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    position: relative;
+    box-shadow:
+      0 0 60px rgba(212,168,73,0.25),
+      inset 0 0 40px rgba(212,168,73,0.1);
+  }
+  .title-mark::after {
+    content: '';
+    position: absolute; inset: 8px;
+    border: 1px solid var(--gilt);
+    border-radius: 50%;
+    opacity: 0.4;
+  }
+  .title-mark img {
+    width: 70%; height: 70%;
+    object-fit: contain;
+    filter: drop-shadow(0 0 20px var(--gilt));
+  }
+  .title-mark.placeholder::before {
+    content: '✶';
+    font-size: 100px;
+    color: var(--gilt);
+    text-shadow: 0 0 30px var(--gilt-bright);
+  }
+  h1.title {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 900;
+    font-size: 44px;
+    letter-spacing: 0.1em;
+    color: var(--gilt);
+    margin: 0 0 8px;
+    text-shadow: 0 0 30px rgba(212,168,73,0.5);
+  }
+  .subtitle {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--parchment-dk);
+    letter-spacing: 0.05em;
+    margin-bottom: 48px;
+    max-width: 280px;
+  }
+  .menu-buttons {
+    display: flex; flex-direction: column;
+    gap: 14px; width: 100%; max-width: 320px;
+  }
+
+  /* ============ BUTTONS ============ */
+  button.btn {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.18em;
+    color: var(--parchment);
+    background: linear-gradient(to bottom, var(--ink-warm), var(--ink-mid));
+    border: 1px solid var(--gilt);
+    border-radius: 2px;
+    padding: 16px 24px;
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    transition: transform 0.12s, box-shadow 0.12s, background 0.2s;
+    box-shadow: 0 2px 0 var(--ink-deep), 0 4px 12px rgba(0,0,0,0.4);
+    min-height: 50px;
+  }
+  button.btn::before, button.btn::after {
+    content: '';
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px;
+    border: 1px solid var(--gilt);
+    opacity: 0.6;
+  }
+  button.btn::before { left: 8px; border-right: 0; border-bottom: 0; }
+  button.btn::after  { right: 8px; border-left: 0; border-top: 0; }
+  button.btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 0 var(--ink-deep), 0 2px 8px rgba(0,0,0,0.4);
+  }
+  button.btn.primary {
+    background: linear-gradient(to bottom, #2a1f10, var(--ink-warm));
+    color: var(--gilt-bright);
+    border-color: var(--gilt-bright);
+  }
+  button.btn.danger { color: var(--crimson); border-color: var(--crimson-dk); }
+  button.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.btn.small { padding: 8px 14px; font-size: 12px; min-height: 36px; }
+  .gf-itch-link {
+    display: inline-block; margin-top: 18px;
+    color: var(--gilt); text-decoration: none;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    opacity: 0.72; transition: opacity 0.2s, color 0.2s;
+    border-bottom: 1px solid rgba(212,168,73,0.35); padding-bottom: 2px;
+  }
+  .gf-itch-link:hover { opacity: 1; color: var(--gilt-bright); }
+  .gf-toast {
+    position: fixed; left: 50%; bottom: 7%; transform: translateX(-50%);
+    background: var(--ink-warm); color: var(--parchment);
+    border: 1px solid var(--gilt); border-radius: 4px;
+    padding: 10px 18px; font-size: 13px; letter-spacing: 0.04em;
+    box-shadow: 0 6px 24px var(--shadow); z-index: 9999;
+    animation: gf-toast-in 0.25s ease-out;
+  }
+  @keyframes gf-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  button.btn.icon {
+    padding: 8px; min-height: 36px; min-width: 36px;
+    font-size: 14px;
+  }
+
+  /* ============ GAME SCREEN ============ */
+  #game-screen { padding: 0; }
+
+  .hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 8px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    border-bottom: 1px solid rgba(212,168,73,0.2);
+    background: var(--ink-deep);
+  }
+  .hud-left, .hud-right { display: flex; align-items: center; gap: 10px; }
+  .hud-stat {
+    font-family: 'IM Fell English', serif;
+    color: var(--parchment-dk);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+  .hud-stat strong {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--gilt-bright);
+    font-weight: 700;
+    margin-left: 4px;
+  }
+  .hp-bar {
+    width: 80px; height: 8px;
+    background: var(--ink-warm);
+    border: 1px solid var(--parchment-sh);
+    border-radius: 1px;
+    overflow: hidden;
+    position: relative;
+  }
+  .hp-bar > div {
+    height: 100%;
+    background: linear-gradient(to right, var(--crimson-dk), var(--crimson));
+    transition: width 0.4s ease-out;
+  }
+
+  /* ----- Enemy region ----- */
+  .enemy-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 16px;
+    background:
+      radial-gradient(ellipse at center, rgba(168,50,50,0.08), transparent 70%),
+      var(--ink-deep);
+  }
+  .enemy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .enemy-portrait {
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: var(--ink-warm);
+    border: 1px solid var(--crimson-dk);
+    display: grid; place-items: center;
+    position: relative;
+    box-shadow:
+      0 0 40px rgba(168,50,50,0.3),
+      inset 0 0 30px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  .enemy-portrait img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    filter: contrast(1.1) brightness(0.9);
+  }
+  .enemy-portrait.placeholder::after {
+    content: '⌬';
+    font-size: 90px;
+    color: var(--crimson);
+    text-shadow: 0 0 30px var(--crimson);
+  }
+  .enemy-portrait.hit {
+    animation: shake 0.4s, flash 0.4s;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(7px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(3px); }
+  }
+  @keyframes flash {
+    0%, 100% { filter: none; }
+    30% { filter: brightness(2) saturate(0.5); }
+  }
+  .enemy-name {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 20px;
+    color: var(--parchment);
+    letter-spacing: 0.12em;
+  }
+  .enemy-hp-row {
+    display: flex; align-items: center; gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--crimson);
+  }
+  .enemy-hp-bar {
+    width: 160px; height: 12px;
+    background: var(--ink-warm);
+    border: 1px solid var(--crimson-dk);
+    overflow: hidden;
+  }
+  .enemy-hp-bar > div {
+    height: 100%;
+    background: linear-gradient(to right, var(--crimson), var(--crimson-dk));
+    transition: width 0.5s ease-out;
+  }
+  .threat-meter {
+    display: flex; gap: 4px; margin-top: 4px;
+  }
+  .threat-pip {
+    width: 10px; height: 10px;
+    border: 1px solid var(--crimson-dk);
+    background: var(--ink-deep);
+    transform: rotate(45deg);
+  }
+  .threat-pip.active { background: var(--crimson); box-shadow: 0 0 6px var(--crimson); }
+
+  /* Floating damage numbers */
+  .damage-pop {
+    position: absolute;
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 900;
+    font-size: 38px;
+    color: var(--gilt-bright);
+    text-shadow:
+      0 0 10px var(--gilt),
+      0 2px 0 var(--ink-deep),
+      0 4px 12px rgba(0,0,0,0.8);
+    pointer-events: none;
+    animation: damageFloat 1.2s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+    z-index: 50;
+  }
+  .damage-pop.crit {
+    color: var(--crimson);
+    font-size: 52px;
+  }
+  @keyframes damageFloat {
+    0%   { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+    20%  { transform: translate(-50%, -10px) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -120px) scale(0.9); opacity: 0; }
+  }
+
+  /* ----- Spell slots ----- */
+  .spell-area {
+    padding: 12px 16px;
+    background: var(--ink-mid);
+    border-top: 1px solid rgba(212,168,73,0.15);
+    border-bottom: 1px solid rgba(212,168,73,0.15);
+  }
+  .spell-readout {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+    font-family: 'IM Fell English', serif;
+    color: var(--parchment-dk);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    font-style: italic;
+  }
+  .spell-damage {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--gilt-bright);
+    letter-spacing: 0.1em;
+  }
+  .spell-slots {
+    display: flex; gap: 8px; justify-content: center;
+  }
+  .spell-slot {
+    flex: 1;
+    aspect-ratio: 1;
+    max-width: 90px;
+    border: 1px dashed var(--parchment-sh);
+    background: rgba(0,0,0,0.4);
+    border-radius: 4px;
+    display: grid; place-items: center;
+    color: var(--parchment-sh);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .spell-slot.filled {
+    border-style: solid;
+    border-color: var(--gilt);
+    background: var(--ink-warm);
+    cursor: pointer;
+  }
+  .spell-slot.synergy-element { box-shadow: 0 0 0 1px var(--verdigris), 0 0 12px rgba(90,141,106,0.4); }
+  .spell-slot.synergy-shape { box-shadow: 0 0 0 1px var(--violet), 0 0 12px rgba(107,77,140,0.4); }
+  .spell-slot.synergy-both {
+    box-shadow:
+      0 0 0 1px var(--gilt-bright),
+      0 0 16px rgba(240,196,106,0.5);
+  }
+
+  /* ----- Hand area ----- */
+  .hand-area {
+    padding: 12px 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: var(--ink-deep);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 200px;
+  }
+  .hand-label {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 4px;
+  }
+  .hand-label span {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--parchment-dk);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+  .hand-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    flex: 1;
+  }
+
+  /* ----- Rune card ----- */
+  .rune {
+    aspect-ratio: 5/7;
+    background: linear-gradient(135deg, var(--vellum), var(--parchment-dk));
+    border: 1px solid var(--gilt);
+    border-radius: 3px;
+    padding: 4px;
+    display: flex; flex-direction: column;
+    color: var(--ink-deep);
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 6px var(--shadow), inset 0 0 12px rgba(139,109,68,0.15);
+    overflow: hidden;
+  }
+  .rune::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--grain);
+    opacity: 0.4;
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+  .rune:active { transform: translateY(2px) scale(0.97); }
+  .rune.placed { opacity: 0.3; pointer-events: none; }
+  .rune.rarity-uncommon { border-color: var(--verdigris); }
+  .rune.rarity-rare     { border-color: var(--violet); box-shadow: 0 2px 6px var(--shadow), 0 0 12px rgba(107,77,140,0.3), inset 0 0 12px rgba(107,77,140,0.1); }
+  .rune.rarity-mythic   { border-color: var(--crimson); box-shadow: 0 2px 6px var(--shadow), 0 0 18px rgba(168,50,50,0.4), inset 0 0 14px rgba(168,50,50,0.15); }
+
+  .rune-art {
+    flex: 1;
+    background: var(--ink-warm);
+    border: 1px solid var(--parchment-sh);
+    border-radius: 2px;
+    display: grid; place-items: center;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 3px;
+  }
+  .rune-art img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .rune-art.placeholder::after {
+    content: attr(data-glyph);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 28px;
+    color: var(--gilt);
+    text-shadow: 0 0 8px var(--gilt);
+  }
+  .rune-name {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-align: center;
+    color: var(--ink-warm);
+    line-height: 1.1;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rune-stats {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    color: var(--ink-warm);
+    padding: 0 2px;
+  }
+  .rune-stat-power {
+    font-weight: 700;
+    color: var(--crimson);
+  }
+  .rune-element-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 2px;
+    vertical-align: middle;
+  }
+
+  /* Element colors (small visual indicators) */
+  .el-fire    { background: #d4633a; }
+  .el-water   { background: #3a7dd4; }
+  .el-earth   { background: #8a6b3a; }
+  .el-air     { background: #c4d4e0; }
+  .el-void    { background: #2a2030; }
+  .el-light   { background: #f0e0a0; box-shadow: 0 0 4px #f0e0a0; }
+  .el-shadow  { background: #1a1015; }
+  .el-order   { background: #d4a849; }
+  .el-chaos   { background: #b03a8a; }
+
+  /* ----- Cast button ----- */
+  .cast-row {
+    display: flex; gap: 8px;
+    padding: 8px 16px 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: var(--ink-deep);
+    border-top: 1px solid rgba(212,168,73,0.15);
+  }
+  .cast-row button { flex: 1; }
+  .cast-row button.cast {
+    font-size: 18px;
+    background: linear-gradient(to bottom, var(--crimson-dk), #4a1414);
+    color: var(--gilt-bright);
+    border-color: var(--gilt);
+  }
+  .cast-row button.cast:not(:disabled) {
+    animation: pulseGlow 2.2s ease-in-out infinite;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 2px 0 var(--ink-deep), 0 0 0 rgba(212,168,73,0); }
+    50% { box-shadow: 0 2px 0 var(--ink-deep), 0 0 20px rgba(212,168,73,0.4); }
+  }
+
+  /* ============ MODAL / OVERLAY ============ */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(10,7,5,0.92);
+    z-index: 100;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .modal-bg.active { display: flex; }
+  .modal {
+    background: var(--ink-mid);
+    border: 1px solid var(--gilt);
+    border-radius: 4px;
+    padding: 28px 24px;
+    max-width: 380px; width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(212,168,73,0.2), 0 12px 40px var(--shadow);
+    position: relative;
+  }
+  .modal::before, .modal::after {
+    content: '';
+    position: absolute;
+    width: 20px; height: 20px;
+    border: 1px solid var(--gilt);
+  }
+  .modal::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+  .modal::after  { bottom: 6px; right: 6px; border-left: 0; border-top: 0; }
+  .modal h2 {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 900;
+    color: var(--gilt);
+    letter-spacing: 0.12em;
+    font-size: 22px;
+    margin: 0 0 8px;
+  }
+  .modal p {
+    font-family: 'IM Fell English', serif;
+    color: var(--parchment-dk);
+    font-style: italic;
+    margin: 0 0 18px;
+  }
+  .modal .choices {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-top: 16px;
+  }
+  .modal .reward-rune {
+    display: flex; gap: 10px;
+    background: var(--ink-warm);
+    border: 1px solid var(--parchment-sh);
+    border-radius: 3px;
+    padding: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .modal .reward-rune:active { transform: scale(0.97); }
+  .modal .reward-rune:hover, .modal .reward-rune:active {
+    border-color: var(--gilt);
+  }
+  .modal .reward-rune .rune {
+    width: 60px;
+    min-width: 60px;
+    aspect-ratio: 5/7;
+  }
+  .modal .reward-rune-info {
+    flex: 1;
+    display: flex; flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+  }
+  .modal .reward-rune-info .name {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 700;
+    color: var(--gilt-bright);
+    font-size: 14px;
+    letter-spacing: 0.06em;
+  }
+  .modal .reward-rune-info .desc {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--parchment-dk);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .modal .reward-rune-info .tags {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-sh);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ============ TOOLTIP ============ */
+  .tooltip {
+    position: fixed;
+    background: var(--ink-deep);
+    border: 1px solid var(--gilt);
+    padding: 8px 12px;
+    border-radius: 3px;
+    max-width: 240px;
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--parchment);
+    font-size: 13px;
+    z-index: 200;
+    pointer-events: none;
+    box-shadow: 0 8px 24px var(--shadow);
+    line-height: 1.4;
+  }
+  .tooltip .tt-name {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 700;
+    color: var(--gilt);
+    font-style: normal;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .tooltip .tt-tags {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-sh);
+    font-style: normal;
+    margin-top: 4px;
+    display: block;
+    letter-spacing: 0.05em;
+  }
+
+  /* ============ CODEX / META SCREENS ============ */
+  #codex-screen, #map-screen { padding: 20px 16px; overflow-y: auto; }
+  .codex-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 18px;
+    padding-top: env(safe-area-inset-top);
+  }
+  .codex-header h2 {
+    font-family: 'Cinzel Decorative', serif;
+    color: var(--gilt);
+    letter-spacing: 0.12em;
+    margin: 0;
+    font-size: 22px;
+  }
+  .codex-stats {
+    display: flex; gap: 12px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .codex-stat {
+    flex: 1;
+    min-width: 100px;
+    background: var(--ink-mid);
+    border: 1px solid var(--parchment-sh);
+    padding: 10px;
+    text-align: center;
+  }
+  .codex-stat .label {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--parchment-sh);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+  .codex-stat .value {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--gilt-bright);
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .codex-section-title {
+    font-family: 'Cinzel Decorative', serif;
+    color: var(--parchment-dk);
+    letter-spacing: 0.1em;
+    font-size: 13px;
+    margin: 18px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--parchment-sh);
+  }
+  .codex-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .codex-combo {
+    background: var(--ink-mid);
+    border: 1px solid var(--parchment-sh);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 2px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .codex-combo .name {
+    font-family: 'Cinzel Decorative', serif;
+    color: var(--gilt);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+  .codex-combo .glyphs {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--parchment-sh);
+    font-size: 11px;
+  }
+  .codex-combo .peak {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--crimson);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .codex-rune-locked {
+    background: var(--ink-warm);
+    border: 1px dashed var(--parchment-sh);
+    aspect-ratio: 5/7;
+    display: grid; place-items: center;
+    color: var(--parchment-sh);
+    font-size: 24px;
+    opacity: 0.4;
+  }
+
+  /* ============ MAP / PATH SCREEN ============ */
+  .map-path {
+    display: flex; flex-direction: column;
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .map-node {
+    background: var(--ink-mid);
+    border: 1px solid var(--parchment-sh);
+    padding: 16px;
+    border-radius: 3px;
+    display: flex; align-items: center; gap: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s, background 0.2s;
+  }
+  .map-node.current {
+    border-color: var(--gilt);
+    background: var(--ink-warm);
+    box-shadow: 0 0 20px rgba(212,168,73,0.25);
+  }
+  .map-node.completed { opacity: 0.4; }
+  .map-node.locked { opacity: 0.25; pointer-events: none; }
+  .map-node:active:not(.locked):not(.completed) { transform: scale(0.98); }
+  .map-node-icon {
+    width: 40px; height: 40px;
+    border: 1px solid var(--gilt);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 18px;
+    color: var(--gilt);
+    flex-shrink: 0;
+  }
+  .map-node-icon.boss { border-color: var(--crimson); color: var(--crimson); }
+  .map-node-info { flex: 1; }
+  .map-node-info .title {
+    font-family: 'Cinzel Decorative', serif;
+    color: var(--parchment);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+  }
+  .map-node-info .sub {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--parchment-dk);
+    font-size: 12px;
+  }
+
+  /* ============ VICTORY / DEFEAT ============ */
+  .result-screen { text-align: center; padding: 40px 24px; }
+  .result-icon {
+    font-size: 80px;
+    color: var(--gilt);
+    margin-bottom: 16px;
+    animation: resultEnter 0.8s cubic-bezier(0.2, 0.6, 0.3, 1.2);
+  }
+  .result-icon.defeat { color: var(--crimson); }
+  @keyframes resultEnter {
+    0% { opacity: 0; transform: scale(0.3) rotate(-10deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+  }
+
+  /* ============ SCROLLBAR ============ */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--ink-deep); }
+  ::-webkit-scrollbar-thumb { background: var(--parchment-sh); }
+
+  /* ============ COMBO BANNER ============ */
+  .combo-banner {
+    position: fixed;
+    top: 35%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--ink-deep);
+    border: 1px solid var(--gilt);
+    padding: 16px 32px;
+    z-index: 90;
+    text-align: center;
+    pointer-events: none;
+    animation: comboBanner 1.6s ease-out forwards;
+    box-shadow: 0 0 40px var(--gilt);
+  }
+  @keyframes comboBanner {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    30% { transform: translate(-50%, -50%) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+  .combo-banner .label {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--parchment-dk);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .combo-banner .name {
+    font-family: 'Cinzel Decorative', serif;
+    font-weight: 900;
+    color: var(--gilt-bright);
+    font-size: 24px;
+    letter-spacing: 0.15em;
+    margin-top: 4px;
+  }
+  .combo-banner.new::after {
+    content: 'INSCRIBED';
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--verdigris);
+    letter-spacing: 0.3em;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ TITLE ============ -->
+  <section id="title-screen" class="screen active">
+    <div class="title-mark placeholder" data-art-slot="title-mark">
+      <!-- Claude Code: swap in art-slots/title-mark.png (1024x1024) -->
+    </div>
+    <h1 class="title">Glyph Forge</h1>
+    <p class="subtitle">A codex of bound sigils, awaiting their first inscription.</p>
+    <div class="menu-buttons">
+      <button class="btn primary" id="btn-new-run">Begin Inscription</button>
+      <button class="btn" id="btn-continue">Continue</button>
+      <button class="btn" id="btn-codex">The Codex</button>
+      <button class="btn small" id="btn-daily">Daily Sigil</button>
+    </div>
+    <a id="gf-itch-link" class="gf-itch-link" href="#" target="_blank" rel="noopener" hidden>Pay-what-you-want on itch.io ↗</a>
+  </section>
+
+  <!-- ============ MAP / PATH ============ -->
+  <section id="map-screen" class="screen">
+    <div class="codex-header">
+      <h2>The Path</h2>
+      <button class="btn icon" id="btn-back-title">✕</button>
+    </div>
+    <p style="font-family: 'IM Fell English', serif; font-style: italic; color: var(--parchment-dk); text-align: center;">
+      Thirteen sigils stand between you and the Sovereign.
+    </p>
+    <div class="map-path" id="map-path"></div>
+  </section>
+
+  <!-- ============ GAME / COMBAT ============ -->
+  <section id="game-screen" class="screen">
+    <div class="hud">
+      <div class="hud-left">
+        <span class="hud-stat">⚔ <strong id="hud-encounter">1</strong>/13</span>
+        <div class="hp-bar"><div id="hud-hp-fill" style="width: 100%"></div></div>
+        <span class="hud-stat">♥ <strong id="hud-hp">50</strong></span>
+        <span class="hud-stat fluency-stat" id="hud-fluency-wrap" title="Fluency — each defeated enemy boosts spell damage by 10%">✦ <strong id="hud-fluency">×1.00</strong></span>
+      </div>
+      <div class="hud-right">
+        <button class="btn icon small" id="btn-flee">⌫</button>
+      </div>
+    </div>
+
+    <div class="enemy-stage" id="enemy-stage">
+      <div class="enemy">
+        <div class="enemy-portrait placeholder" id="enemy-portrait"
+             data-art-slot="enemy-{id}">
+        </div>
+        <div class="enemy-name" id="enemy-name">—</div>
+        <div class="enemy-hp-row">
+          <div class="enemy-hp-bar"><div id="enemy-hp-fill" style="width: 100%"></div></div>
+          <span id="enemy-hp-text">0/0</span>
+        </div>
+        <div class="threat-meter" id="threat-meter"></div>
+      </div>
+    </div>
+
+    <div class="spell-area">
+      <div class="spell-readout">
+        <span id="spell-formula" style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">—</span>
+        <span class="spell-damage" id="spell-damage">0</span>
+      </div>
+      <div class="spell-slots" id="spell-slots">
+        <div class="spell-slot" data-slot="0">I</div>
+        <div class="spell-slot" data-slot="1">II</div>
+        <div class="spell-slot" data-slot="2">III</div>
+      </div>
+    </div>
+
+    <div class="hand-area">
+      <div class="hand-label">
+        <span>Hand</span>
+        <span id="deck-info">deck: 0 / discard: 0</span>
+      </div>
+      <div class="hand-grid" id="hand-grid"></div>
+    </div>
+
+    <div class="cast-row">
+      <button class="btn" id="btn-clear">Recall</button>
+      <button class="btn cast" id="btn-cast" disabled>Inscribe</button>
+    </div>
+  </section>
+
+  <!-- ============ CODEX ============ -->
+  <section id="codex-screen" class="screen">
+    <div class="codex-header">
+      <h2>The Codex</h2>
+      <button class="btn icon" id="btn-codex-back">✕</button>
+    </div>
+    <div class="codex-stats" id="codex-stats"></div>
+    <div class="codex-section-title">Discovered Fusions</div>
+    <div id="codex-combos"></div>
+    <div class="codex-section-title">Bound Glyphs</div>
+    <div class="codex-grid" id="codex-runes"></div>
+  </section>
+
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<!-- ============ TOOLTIP ============ -->
+<div class="tooltip" id="tooltip" style="display:none"></div>
+
+<script>
+/* ================================================================
+   GLYPH FORGE — game logic
+   Stack: vanilla JS, no deps. Single file. PWA-ready.
+   Persistence: localStorage (key = 'glyph-forge-v1').
+   ================================================================ */
+
+/* ----- 1. RUNE DEFINITIONS -----
+   Properties:
+     id          stable string used in saves
+     name        display
+     element     Fire/Water/Earth/Air/Void/Light/Shadow/Order/Chaos
+     shape       Bolt/Wave/Burst/Spiral/Chain/Pulse/Sigil
+     basePower   0..9, baseline damage contribution
+     rarity      common/uncommon/rare/mythic
+     glyph       fallback unicode if no art swapped
+     desc        flavor + mechanic in plain language
+     effect      function(ctx) hook into spell pipeline
+     starter     bool: appears in default starter pool
+*/
+const RUNES = [
+  // ---------- COMMON (starter pool, basic damage + simple effects) ----------
+  { id:'ember',  name:'Ember',  element:'Fire',   shape:'Bolt',   basePower:2, rarity:'common', glyph:'☄',
+    desc:'A small spark, hungry for tinder.', starter:true },
+  { id:'drop',   name:'Drop',   element:'Water',  shape:'Wave',   basePower:1, rarity:'common', glyph:'❍',
+    desc:'Heals 1 HP on cast.', starter:true,
+    effect:(ctx)=>{ ctx.healSelf += 1; } },
+  { id:'stone',  name:'Stone',  element:'Earth',  shape:'Burst',  basePower:3, rarity:'common', glyph:'◈',
+    desc:'Heavy. Sure.', starter:true },
+  { id:'gust',   name:'Gust',   element:'Air',    shape:'Pulse',  basePower:1, rarity:'common', glyph:'≋',
+    desc:'+1 power to the next rune in line.', starter:true,
+    effect:(ctx,i)=>{ if(ctx.runes[i+1]) ctx.runeMod[i+1].add += 1; } },
+  { id:'hollow', name:'Hollow', element:'Void',   shape:'Sigil',  basePower:1, rarity:'common', glyph:'⊘',
+    desc:"Strips the enemy's ward this turn.", starter:true,
+    effect:(ctx)=>{ ctx.ignoreWard = true; } },
+  { id:'ray',    name:'Ray',    element:'Light',  shape:'Bolt',   basePower:2, rarity:'common', glyph:'✦',
+    desc:'+50% vs Shadow-aligned foes.', starter:true,
+    effect:(ctx)=>{ if(ctx.enemyTag==='shadow') ctx.globalMult *= 1.5; } },
+  { id:'veil',   name:'Veil',   element:'Shadow', shape:'Pulse',  basePower:1, rarity:'common', glyph:'☽',
+    desc:'Draw +1 card after cast.', starter:true,
+    effect:(ctx)=>{ ctx.bonusDraw += 1; } },
+  { id:'tally',  name:'Tally',  element:'Order',  shape:'Sigil',  basePower:2, rarity:'common', glyph:'┼',
+    desc:'+1 power per other Order rune in spell.', starter:true,
+    effect:(ctx,i)=>{
+      const orderCt = ctx.runes.filter(r=>r && r.element==='Order').length;
+      ctx.runeMod[i].add += (orderCt - 1);
+    } },
+  { id:'roll',   name:'Roll',   element:'Chaos',  shape:'Spiral', basePower:0, rarity:'common', glyph:'※',
+    desc:'Random power: 1 to 5.', starter:true,
+    effect:(ctx,i)=>{ ctx.runeMod[i].add += 1 + Math.floor(ctx.rng()*5); } },
+
+  // ---------- UNCOMMON (modifiers and amplifiers) ----------
+  { id:'echo',     name:'Echo',     element:'Order',  shape:'Sigil',  basePower:0, rarity:'uncommon', glyph:'⟲',
+    desc:'Triggers the rune to its left a second time.',
+    effect:(ctx,i)=>{
+      const left = ctx.runes[i-1];
+      if(left){
+        ctx.runeMod[i-1].repeats += 1;
+      }
+    } },
+  { id:'mirror',   name:'Mirror',   element:'Chaos',  shape:'Spiral', basePower:0, rarity:'uncommon', glyph:'◐',
+    desc:'Copies the element and shape of the rune to its left.',
+    effect:(ctx,i)=>{
+      const left = ctx.runes[i-1];
+      if(left){
+        ctx.runes[i] = { ...ctx.runes[i], element: left.element, shape: left.shape };
+      }
+    } },
+  { id:'surge',    name:'Surge',    element:'Fire',   shape:'Burst',  basePower:2, rarity:'uncommon', glyph:'❋',
+    desc:'+50% power to runes beside it.',
+    effect:(ctx,i)=>{
+      if(ctx.runes[i-1]) ctx.runeMod[i-1].mult *= 1.5;
+      if(ctx.runes[i+1]) ctx.runeMod[i+1].mult *= 1.5;
+    } },
+  { id:'cascade',  name:'Cascade',  element:'Water',  shape:'Chain',  basePower:0, rarity:'uncommon', glyph:'⥥',
+    desc:'All later runes also deal their damage as bonus.',
+    effect:(ctx,i)=>{
+      for(let j=i+1; j<ctx.runes.length; j++) if(ctx.runes[j]) ctx.runeMod[j].add += ctx.runes[j].basePower;
+    } },
+  { id:'anchor',   name:'Anchor',   element:'Earth',  shape:'Sigil',  basePower:1, rarity:'uncommon', glyph:'⚓',
+    desc:'+1 power to every other Earth rune.',
+    effect:(ctx,i)=>{
+      ctx.runes.forEach((r,j)=>{ if(j!==i && r && r.element==='Earth') ctx.runeMod[j].add += 1; });
+    } },
+  { id:'drift',    name:'Drift',    element:'Air',    shape:'Wave',   basePower:0, rarity:'uncommon', glyph:'∽',
+    desc:'+2 power for each rune to its right.',
+    effect:(ctx,i)=>{
+      const right = ctx.runes.slice(i+1).filter(Boolean).length;
+      ctx.runeMod[i].add += right * 2;
+    } },
+  { id:'drain',    name:'Drain',    element:'Shadow', shape:'Wave',   basePower:2, rarity:'uncommon', glyph:'∝',
+    desc:'Heals you for half its damage.',
+    effect:(ctx,i)=>{ ctx.runeMod[i].lifesteal = 0.5; } },
+  { id:'beacon',   name:'Beacon',   element:'Light',  shape:'Pulse',  basePower:0, rarity:'uncommon', glyph:'☼',
+    desc:'+100% to next rune cast after this one.',
+    effect:(ctx,i)=>{ if(ctx.runes[i+1]) ctx.runeMod[i+1].mult *= 2; } },
+  { id:'sympathy', name:'Sympathy', element:'Void',   shape:'Spiral', basePower:0, rarity:'uncommon', glyph:'∞',
+    desc:'Copies your most-played rune this run.',
+    effect:(ctx,i)=>{
+      const fav = ctx.meta.favoriteRune;
+      if(fav && fav !== 'sympathy'){
+        const r = RUNES.find(x=>x.id===fav);
+        if(r){ ctx.runes[i] = { ...r }; if(r.effect) r.effect(ctx,i); }
+      }
+    } },
+
+  // ---------- RARE (heavy synergy pieces) ----------
+  { id:'ouroboros',  name:'Ouroboros', element:'Chaos',  shape:'Spiral', basePower:0, rarity:'rare', glyph:'∮',
+    desc:'Re-casts the entire spell once. Once per turn.',
+    effect:(ctx)=>{ ctx.spellRetrigger = Math.min(ctx.spellRetrigger + 1, 1); } },
+  { id:'twin',       name:'Twin',      element:'Order',  shape:'Sigil',  basePower:0, rarity:'rare', glyph:'⧉',
+    desc:'First rune in the spell fires twice more.',
+    effect:(ctx)=>{ if(ctx.runes[0]) ctx.runeMod[0].repeats += 2; } },
+  { id:'triskel',    name:'Triskelion',element:'Order',  shape:'Spiral', basePower:3, rarity:'rare', glyph:'☘',
+    desc:'+200% if all three slots share an element.',
+    effect:(ctx)=>{
+      const els = ctx.runes.filter(Boolean).map(r=>r.element);
+      if(els.length===3 && els[0]===els[1] && els[1]===els[2]) ctx.globalMult *= 3;
+    } },
+  { id:'wildfire',   name:'Wildfire',  element:'Fire',   shape:'Chain',  basePower:3, rarity:'rare', glyph:'✺',
+    desc:'Strikes twice. Burns for 2 next turn.',
+    effect:(ctx,i)=>{ ctx.runeMod[i].repeats += 1; ctx.burnNext += 2; } },
+  { id:'tidewall',   name:'Tidewall',  element:'Water',  shape:'Wave',   basePower:1, rarity:'rare', glyph:'⌒',
+    desc:'+1 damage per missing HP of yours.',
+    effect:(ctx,i)=>{
+      const missing = ctx.maxHp - ctx.hp;
+      ctx.runeMod[i].add += missing;
+    } },
+  { id:'quake',      name:'Quake',     element:'Earth',  shape:'Burst',  basePower:5, rarity:'rare', glyph:'☷',
+    desc:'Stuns the enemy. Skips their next attack.',
+    effect:(ctx)=>{ ctx.stun = true; } },
+  { id:'tempest',    name:'Tempest',   element:'Air',    shape:'Chain',  basePower:2, rarity:'rare', glyph:'⌇',
+    desc:'+1 power per other Air rune in your hand or deck.',
+    effect:(ctx,i)=>{
+      const cnt = [...ctx.hand, ...ctx.deck].filter(id=>{
+        const r = RUNES.find(x=>x.id===id); return r && r.element==='Air';
+      }).length;
+      ctx.runeMod[i].add += cnt;
+    } },
+  { id:'eclipse',    name:'Eclipse',   element:'Shadow', shape:'Sigil',  basePower:0, rarity:'rare', glyph:'☋',
+    desc:'Damage cannot be reduced this turn.',
+    effect:(ctx)=>{ ctx.trueDamage = true; } },
+
+  // ---------- MYTHIC (the broken pieces) ----------
+  { id:'recursion',  name:'Recursion', element:'Order',  shape:'Spiral', basePower:0, rarity:'mythic', glyph:'∾',
+    desc:'Triggers itself once. Stacks with other Recursions.',
+    effect:(ctx,i)=>{
+      const stacks = ctx.runes.filter(r=>r && r.id==='recursion').length;
+      ctx.globalMult *= (1 + Math.min(stacks, 4));
+    } },
+  { id:'pandemonium',name:'Pandemonium',element:'Chaos', shape:'Sigil',  basePower:0, rarity:'mythic', glyph:'⚝',
+    desc:'Every rune in your hand also fires this turn.',
+    effect:(ctx)=>{ ctx.pandemonium = true; } },
+  { id:'singularity',name:'Singularity',element:'Void',  shape:'Burst',  basePower:0, rarity:'mythic', glyph:'⊙',
+    desc:'Multiplies all damage by your hand size.',
+    effect:(ctx)=>{ ctx.globalMult *= Math.max(1, ctx.hand.length); } },
+  { id:'aurora',     name:'Aurora',    element:'Light',  shape:'Pulse',  basePower:0, rarity:'mythic', glyph:'❂',
+    desc:'×5 damage if all three slots are different elements.',
+    effect:(ctx)=>{
+      const els = ctx.runes.filter(Boolean).map(r=>r.element);
+      const unique = new Set(els);
+      if(unique.size === 3) ctx.globalMult *= 5;
+    } },
+];
+
+/* ----- 2. ENEMIES ----- */
+const ENEMIES = [
+  // tier 1: introduction. should fall in 2-3 spells.
+  { id:'cinder',     name:'Cinder',          tier:1, hp:8,   threat:2, tag:'shadow', glyph:'⌬',
+    desc:'A reluctant spark.' },
+  { id:'wisp',       name:'Wisp',            tier:1, hp:10,  threat:2, tag:'air',    glyph:'◌',
+    desc:'Half here, half elsewhere.' },
+  { id:'fenmote',    name:'Fenmote',         tier:1, hp:12,  threat:2, tag:'earth',  glyph:'⌖',
+    desc:'Stubborn. Lichen-clad.' },
+  // tier 2: requires basic synergies. 4-5 spells.
+  { id:'wight',      name:'Hollow Wight',    tier:2, hp:26,  threat:3, tag:'void',   glyph:'⌘',
+    desc:'A grammar of teeth.' },
+  { id:'sirenshade', name:'Sirenshade',      tier:2, hp:30,  threat:3, tag:'water',  glyph:'⌭',
+    desc:'Sings in the wrong key.' },
+  // tier 3: needs amplifiers / mythics. 5-8 spells.
+  { id:'revenant',   name:'Brass Revenant',  tier:3, hp:52,  threat:4, tag:'order',  glyph:'❖',
+    desc:'It remembers being a bell.' },
+  { id:'glasswyrm',  name:'Glass Wyrm',      tier:3, hp:64,  threat:4, tag:'chaos',  glyph:'☖',
+    desc:'Counts your reflections.' },
+  // tier 4: the wall. 8-12 spells. mythic territory.
+  { id:'sovereign',  name:'The Sovereign',   tier:4, hp:210, threat:5, tag:'void',   glyph:'✺',
+    desc:'It signed your name first.', boss:true },
+];
+
+/* ----- 3. COMBO NAMING -----
+   The Codex names spells you've cast based on their composition.
+   Hashes spell shape+element+rune-id signature. Some named "broken combos"
+   are detected via signature; the rest get procedural names.
+*/
+const NAMED_COMBOS = [
+  { id:'thrice-fire', match: (rs)=> rs.length===3 && rs.every(r=>r.element==='Fire'), name:'Triple Conflagration' },
+  { id:'thrice-water',match: (rs)=> rs.length===3 && rs.every(r=>r.element==='Water'), name:'The Drowned Choir' },
+  { id:'thrice-order',match: (rs)=> rs.length===3 && rs.every(r=>r.element==='Order'), name:'Three Laws Bound' },
+  { id:'thrice-chaos',match: (rs)=> rs.length===3 && rs.every(r=>r.element==='Chaos'), name:'Pandaemonium Triad' },
+  { id:'echo-stack',  match: (rs)=> rs.filter(r=>r.id==='echo').length>=2, name:'Stuttering Bell' },
+  { id:'mirror-echo', match: (rs)=> rs.some(r=>r.id==='echo') && rs.some(r=>r.id==='mirror'), name:'False Twin' },
+  { id:'aurora-spire',match: (rs)=> rs.length===3 && new Set(rs.map(r=>r.element)).size===3 && rs.some(r=>r.id==='aurora'), name:'Aurora Spire' },
+  { id:'singular',    match: (rs)=> rs.some(r=>r.id==='singularity'), name:'The Singular Inscription' },
+  { id:'recursive',   match: (rs)=> rs.filter(r=>r.id==='recursion').length>=2, name:'Spiral of Spirals' },
+  { id:'pandemonium', match: (rs)=> rs.some(r=>r.id==='pandemonium'), name:'All Glyphs Speak' },
+  { id:'all-shape',   match: (rs)=> rs.length===3 && new Set(rs.map(r=>r.shape)).size===1, name:'Resonant Form' },
+  { id:'twin-first',  match: (rs)=> rs.length>=2 && rs.some(r=>r.id==='twin'), name:'Doubled Prologue' },
+  { id:'wildfire',    match: (rs)=> rs.some(r=>r.id==='wildfire') && rs.some(r=>r.id==='surge'), name:'Sun-Up Hex' },
+  { id:'ouroboros',   match: (rs)=> rs.some(r=>r.id==='ouroboros'), name:'Tail-Eater' },
+];
+
+function findComboName(spellRunes){
+  for(const c of NAMED_COMBOS){ if(c.match(spellRunes)) return c; }
+  return null;
+}
+
+/* ----- 4. RNG (seeded) ----- */
+function mulberry32(seed){
+  let s = seed >>> 0;
+  return function(){
+    s = (s + 0x6D2B79F5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s){
+  let h = 1779033703 ^ s.length;
+  for(let i=0;i<s.length;i++){
+    h = Math.imul(h ^ s.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return h;
+}
+
+/* ----- 5. STATE ----- */
+const SAVE_KEY = 'glyph-forge-v1';
+let state = loadState();
+
+function defaultState(){
+  return {
+    meta: {
+      discoveredRunes: RUNES.filter(r=>r.starter).map(r=>r.id),
+      discoveredCombos: {},      // id -> { name, peakDamage, runeIds, firstSeen }
+      runeUseCount: {},          // id -> int
+      runsCompleted: 0,
+      runsAttempted: 0,
+      bestRun: 0,
+    },
+    run: null,
+  };
+}
+function loadState(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    return { ...defaultState(), ...parsed, meta: { ...defaultState().meta, ...parsed.meta } };
+  } catch { return defaultState(); }
+}
+function saveState(){
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {}
+}
+
+/* ----- 6. RUN INIT ----- */
+function startNewRun(seedStr){
+  const seed = hashString(seedStr || (Date.now() + ':' + Math.random()));
+  const rng = mulberry32(seed);
+
+  const starterDeck = RUNES.filter(r => r.starter).map(r => r.id);
+  // shuffle starter deck
+  for(let i=starterDeck.length-1; i>0; i--){
+    const j = Math.floor(rng() * (i+1));
+    [starterDeck[i], starterDeck[j]] = [starterDeck[j], starterDeck[i]];
+  }
+
+  // generate path of 13 encounters
+  const path = [];
+  for(let i=0; i<13; i++){
+    const isBoss = i === 12;
+    if(isBoss){
+      path.push({ type:'enemy', enemyId:'sovereign', completed:false });
+    } else {
+      let tier;
+      if(i < 3) tier = 1;
+      else if(i < 7) tier = 2;
+      else tier = 3;
+      const candidates = ENEMIES.filter(e => e.tier === tier && !e.boss);
+      const enemy = candidates[Math.floor(rng() * candidates.length)];
+      path.push({ type:'enemy', enemyId: enemy.id, completed:false });
+    }
+  }
+
+  state.run = {
+    seed: seedStr || String(seed),
+    rngSeed: seed,
+    encounterIdx: 0,
+    hp: 50,
+    maxHp: 50,
+    deck: starterDeck.slice(),
+    hand: [],
+    discard: [],
+    spell: [null, null, null],
+    path,
+    currentThreat: 0,
+    enemyHp: 0,
+    enemyMaxHp: 0,
+    burns: 0,
+    stunNext: false,
+    fluency: 0, // each defeated enemy adds +0.10 to a global damage multiplier (cap 2.20x)
+  };
+  state.meta.runsAttempted += 1;
+  beginEncounter();
+  saveState();
+}
+
+function beginEncounter(){
+  const run = state.run;
+  const node = run.path[run.encounterIdx];
+  const enemy = ENEMIES.find(e=>e.id===node.enemyId);
+  // scale boss / late enemies slightly with progression
+  const scale = 1 + (run.encounterIdx * 0.05);
+  run.enemyHp = Math.floor(enemy.hp * scale);
+  run.enemyMaxHp = run.enemyHp;
+  run.currentThreat = enemy.threat;
+  run.spell = [null, null, null];
+  run.burns = 0;
+  run.stunNext = false;
+  // restore 8 HP between encounters (the ink replenishes)
+  if(run.encounterIdx > 0){
+    run.hp = Math.min(run.maxHp, run.hp + 8);
+  }
+  // refill hand to 5
+  while(run.hand.length < 5 && (run.deck.length > 0 || run.discard.length > 0)){
+    drawOne();
+  }
+  saveState();
+  renderGame();
+}
+
+function drawOne(){
+  const run = state.run;
+  if(run.deck.length === 0){
+    // reshuffle discard
+    run.deck = run.discard.slice();
+    run.discard = [];
+    const rng = mulberry32(run.rngSeed + run.encounterIdx*1000 + run.hand.length);
+    for(let i=run.deck.length-1; i>0; i--){
+      const j = Math.floor(rng()*(i+1));
+      [run.deck[i], run.deck[j]] = [run.deck[j], run.deck[i]];
+    }
+  }
+  if(run.deck.length > 0) run.hand.push(run.deck.shift());
+}
+
+/* ----- 7. SPELL RESOLUTION -----
+   Builds a context, runs each rune's effect, accumulates final damage.
+*/
+function resolveSpell(){
+  const run = state.run;
+  const runeObjs = run.spell.map(id => id ? { ...RUNES.find(r=>r.id===id) } : null);
+  const present = runeObjs.filter(Boolean);
+  if(present.length === 0) return null;
+
+  // favorite rune so far
+  const usageCounts = state.meta.runeUseCount;
+  let favoriteRune = null;
+  let favCt = -1;
+  Object.entries(usageCounts).forEach(([k,v])=>{ if(v > favCt){ favCt = v; favoriteRune = k; }});
+
+  const enemyTag = ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId).tag;
+
+  // context: modifiers per rune slot
+  const ctx = {
+    runes: runeObjs,
+    runeMod: runeObjs.map(()=>({ mult:1, add:0, repeats:1, lifesteal:0 })),
+    globalMult: 1,
+    healSelf: 0,
+    bonusDraw: 0,
+    spellRetrigger: 0,
+    pandemonium: false,
+    burnNext: 0,
+    stun: false,
+    ignoreWard: false,
+    trueDamage: false,
+    enemyTag,
+    hp: run.hp, maxHp: run.maxHp,
+    hand: run.hand.slice(),
+    deck: run.deck.slice(),
+    rng: mulberry32(run.rngSeed + run.encounterIdx*7919 + Date.now()%9999),
+    meta: { favoriteRune },
+  };
+
+  // pass 1: each rune applies its effect in order
+  runeObjs.forEach((r,i)=>{
+    if(r && r.effect) r.effect(ctx, i);
+  });
+
+  // pass 2 (if pandemonium): hand runes contribute their basePower
+  let pandemoniumBonus = 0;
+  if(ctx.pandemonium){
+    run.hand.forEach(id=>{
+      const r = RUNES.find(x=>x.id===id);
+      if(r) pandemoniumBonus += r.basePower;
+    });
+  }
+
+  // element synergy
+  const elementCounts = {};
+  ctx.runes.forEach(r=>{ if(r) elementCounts[r.element] = (elementCounts[r.element]||0)+1; });
+  const maxEl = Math.max(0, ...Object.values(elementCounts));
+  const elementMult = maxEl >= 2 ? 1 + (maxEl-1) * 0.5 : 1;
+
+  // shape resonance
+  const shapeCounts = {};
+  ctx.runes.forEach(r=>{ if(r) shapeCounts[r.shape] = (shapeCounts[r.shape]||0)+1; });
+  const maxSh = Math.max(0, ...Object.values(shapeCounts));
+  const shapeMult = maxSh >= 2 ? 1 + (maxSh-1) * 0.25 : 1;
+
+  ctx.globalMult *= elementMult * shapeMult;
+
+  // damage tally
+  let totalDamage = 0;
+  let totalLifesteal = 0;
+  ctx.runes.forEach((r,i)=>{
+    if(!r) return;
+    const mod = ctx.runeMod[i];
+    const perRune = (r.basePower + mod.add) * mod.mult;
+    const repeatedDmg = perRune * Math.max(1, mod.repeats);
+    totalDamage += repeatedDmg;
+    if(mod.lifesteal > 0) totalLifesteal += repeatedDmg * mod.lifesteal;
+  });
+
+  // pandemonium adds hand-rune base power
+  totalDamage += pandemoniumBonus;
+
+  totalDamage *= ctx.globalMult;
+  if(ctx.spellRetrigger > 0) totalDamage *= (1 + ctx.spellRetrigger);
+
+  // Fluency: the player learns. Each defeated enemy permanently boosts damage by +6%, cap +72%.
+  const fluencyMult = 1 + Math.min(0.72, (run.fluency || 0) * 0.06);
+  totalDamage *= fluencyMult;
+  totalDamage = Math.floor(totalDamage);
+
+  // combo detection
+  const comboMatch = findComboName(present);
+
+  return {
+    damage: totalDamage,
+    healing: ctx.healSelf + Math.floor(totalLifesteal),
+    bonusDraw: ctx.bonusDraw,
+    stun: ctx.stun,
+    burn: ctx.burnNext,
+    trueDamage: ctx.trueDamage,
+    ignoreWard: ctx.ignoreWard,
+    elementMult, shapeMult,
+    globalMult: ctx.globalMult,
+    fluencyMult,
+    comboMatch,
+    presentRunes: present,
+    crit: elementMult * shapeMult >= 2,
+  };
+}
+
+/* preview (no random spending) — used to update damage readout */
+function previewSpellDamage(){
+  const result = resolveSpell();
+  return result ? result.damage : 0;
+}
+
+/* ----- 8. CAST ----- */
+function cast(){
+  const run = state.run;
+  const result = resolveSpell();
+  if(!result || result.presentRunes.length === 0) return;
+
+  // record rune usage
+  result.presentRunes.forEach(r=>{
+    state.meta.runeUseCount[r.id] = (state.meta.runeUseCount[r.id]||0) + 1;
+  });
+
+  // apply damage to enemy
+  run.enemyHp = Math.max(0, run.enemyHp - result.damage);
+
+  // healing
+  if(result.healing > 0){
+    run.hp = Math.min(run.maxHp, run.hp + result.healing);
+  }
+
+  // record combo
+  if(result.comboMatch){
+    const id = result.comboMatch.id;
+    const existing = state.meta.discoveredCombos[id];
+    const isNew = !existing;
+    state.meta.discoveredCombos[id] = {
+      name: result.comboMatch.name,
+      peakDamage: Math.max(existing?.peakDamage || 0, result.damage),
+      runeIds: result.presentRunes.map(r=>r.id),
+      firstSeen: existing?.firstSeen || Date.now(),
+    };
+    showComboBanner(result.comboMatch.name, isNew);
+  }
+
+  // discard used runes + reset spell
+  run.spell.forEach((id,i)=>{
+    if(id){
+      run.discard.push(id);
+    }
+  });
+  run.spell = [null, null, null];
+
+  // draw bonus
+  for(let i=0;i<result.bonusDraw;i++) drawOne();
+
+  // play damage pop
+  showDamage(result.damage, result.crit);
+
+  // enemy reaction
+  const stage = document.getElementById('enemy-portrait');
+  stage.classList.add('hit');
+  setTimeout(()=>stage.classList.remove('hit'), 420);
+
+  // refill hand to 5
+  while(run.hand.length < 5 && (run.deck.length > 0 || run.discard.length > 0)) drawOne();
+
+  saveState();
+  renderGame();
+
+  // check victory / next enemy turn
+  setTimeout(()=>{
+    if(run.enemyHp <= 0){
+      onEnemyDefeated();
+    } else {
+      enemyTurn(result.stun);
+    }
+  }, 600);
+}
+
+function enemyTurn(stunned){
+  const run = state.run;
+  if(stunned){
+    setTimeout(()=>{ saveState(); renderGame(); }, 400);
+    return;
+  }
+  const enemy = ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId);
+  // simple attack: deal threat damage
+  const dmg = enemy.threat;
+  run.hp = Math.max(0, run.hp - dmg);
+  saveState();
+  renderGame();
+  if(run.hp <= 0){
+    setTimeout(()=>onDefeat(), 600);
+  }
+}
+
+/* ----- 9. ENCOUNTER OUTCOMES ----- */
+function onEnemyDefeated(){
+  const run = state.run;
+  run.path[run.encounterIdx].completed = true;
+  run.fluency = (run.fluency || 0) + 1;
+  // award: pick from 3 random runes
+  showRewardModal();
+}
+
+function onDefeat(){
+  window._gfResult = { seed: state.run && state.run.seed, reached: state.run ? state.run.encounterIdx + 1 : 1, won: false };
+  showModal({
+    title: 'The Ink Runs Dry',
+    body: `You reached encounter ${state.run.encounterIdx + 1} of 13.`,
+    icon: '✗',
+    iconDefeat: true,
+    choices: [
+      { label: 'Share result', onClick: gfShare },
+      ...(GF_LINKS.itch ? [{ label: 'Get the full codex ↗', onClick: gfOpenItch }] : []),
+      { label: 'Return to the Codex', onClick: ()=>{ state.run = null; saveState(); showScreen('title-screen'); } }
+    ]
+  });
+}
+
+function onVictory(){
+  window._gfResult = { seed: state.run && state.run.seed, reached: 13, won: true };
+  state.meta.runsCompleted += 1;
+  state.meta.bestRun = Math.max(state.meta.bestRun, 13);
+  state.run = null;
+  saveState();
+  showModal({
+    title: 'The Sovereign Falls',
+    body: 'You have inscribed every glyph. The codex is whole.',
+    icon: '✷',
+    choices: [
+      { label: 'Share victory', onClick: gfShare },
+      ...(GF_LINKS.itch ? [{ label: 'Name your price ↗', onClick: gfOpenItch }] : []),
+      { label: 'Begin Anew', onClick: ()=>{ showScreen('title-screen'); } }
+    ]
+  });
+}
+
+/* ----- 10. REWARD MODAL ----- */
+function showRewardModal(){
+  const run = state.run;
+  const rng = mulberry32(run.rngSeed + run.encounterIdx * 31);
+
+  // Build a weighted pool of runes from the entire set, biased toward what's not already in deck
+  const allOwned = new Set([...run.deck, ...run.hand, ...run.discard, ...run.spell.filter(Boolean)]);
+
+  // tier rule: early = mostly common/uncommon, later = uncommon/rare, last few = rare/mythic
+  let pool;
+  if(run.encounterIdx < 4){
+    pool = RUNES.filter(r => r.rarity === 'common' || r.rarity === 'uncommon');
+  } else if(run.encounterIdx < 9){
+    pool = RUNES.filter(r => r.rarity === 'uncommon' || r.rarity === 'rare');
+  } else {
+    pool = RUNES.filter(r => r.rarity === 'rare' || r.rarity === 'mythic');
+  }
+
+  const offered = [];
+  while(offered.length < 3 && pool.length > 0){
+    const idx = Math.floor(rng() * pool.length);
+    const r = pool[idx];
+    if(!offered.find(o=>o.id===r.id)){
+      offered.push(r);
+    }
+    pool = pool.filter(x=>x.id !== r.id);
+  }
+
+  const isBoss = run.encounterIdx === 12;
+  if(isBoss){
+    // boss completed = win
+    return onVictory();
+  }
+
+  const choices = offered.map(r => ({
+    rune: r,
+    onClick: ()=>{
+      run.deck.push(r.id);
+      if(!state.meta.discoveredRunes.includes(r.id)){
+        state.meta.discoveredRunes.push(r.id);
+      }
+      run.encounterIdx += 1;
+      hideModal();
+      beginEncounter();
+    }
+  }));
+  // also offer "skip + heal" as a fourth option
+  choices.push({
+    isSkip: true,
+    onClick: ()=>{
+      run.hp = Math.min(run.maxHp, run.hp + 10);
+      run.encounterIdx += 1;
+      hideModal();
+      beginEncounter();
+    }
+  });
+
+  renderRewardModal(choices);
+}
+
+function renderRewardModal(choices){
+  const modal = document.getElementById('modal-content');
+  modal.innerHTML = `
+    <h2>The Sigil Yields</h2>
+    <p>Choose what to inscribe into your codex.</p>
+    <div class="choices" id="reward-choices"></div>
+  `;
+  const list = modal.querySelector('#reward-choices');
+  choices.forEach(c=>{
+    if(c.isSkip){
+      const el = document.createElement('div');
+      el.className = 'reward-rune';
+      el.innerHTML = `
+        <div class="rune" style="display:grid;place-items:center;">
+          <div style="font-size:24px;color:var(--gilt);">+6</div>
+        </div>
+        <div class="reward-rune-info">
+          <span class="name">Mend The Vellum</span>
+          <span class="desc">Skip the offering. Restore 10 HP.</span>
+          <span class="tags">heal</span>
+        </div>
+      `;
+      el.onclick = c.onClick;
+      list.appendChild(el);
+    } else {
+      const r = c.rune;
+      const el = document.createElement('div');
+      el.className = 'reward-rune';
+      el.innerHTML = `
+        ${runeCardHTML(r, true)}
+        <div class="reward-rune-info">
+          <span class="name">${r.name}</span>
+          <span class="desc">${r.desc}</span>
+          <span class="tags">${r.element} · ${r.shape} · ${r.rarity}</span>
+        </div>
+      `;
+      el.onclick = c.onClick;
+      list.appendChild(el);
+    }
+  });
+  document.getElementById('modal-bg').classList.add('active');
+}
+
+/* ----- 11. RENDER ----- */
+function runeCardHTML(rune, small){
+  const slotAttr = `data-art-slot="rune-${rune.id}"`;
+  return `
+    <div class="rune rarity-${rune.rarity}">
+      <div class="rune-art placeholder" ${slotAttr} data-glyph="${rune.glyph}">
+        <!-- Swap in art-slots/rune-${rune.id}.png -->
+      </div>
+      ${small ? '' : `<div class="rune-name">${rune.name}</div>`}
+      ${small ? '' : `<div class="rune-stats">
+        <span><span class="rune-element-dot el-${rune.element.toLowerCase()}"></span>${rune.shape[0]}</span>
+        <span class="rune-stat-power">${rune.basePower}</span>
+      </div>`}
+    </div>
+  `;
+}
+
+/* ----- ART AUTO-LOADER -----
+   On each render, look for [data-art-slot] elements still showing a placeholder
+   and attempt to load /art-slots/<slot>.png. If the image loads successfully,
+   replace the placeholder content with an <img>. Failed loads are cached so
+   we don't retry on every render.
+*/
+const ART_CACHE = new Map();  // slot -> 'loaded' | 'missing' | 'pending'
+function hydrateArt(){
+  document.querySelectorAll('[data-art-slot]').forEach(el=>{
+    const slot = el.getAttribute('data-art-slot');
+    if(!slot || !el.classList.contains('placeholder')) return;
+    if(el.querySelector('img')) return;
+    const cached = ART_CACHE.get(slot);
+    if(cached === 'missing') return;
+    if(cached === 'pending') return;
+    ART_CACHE.set(slot, 'pending');
+    const img = new Image();
+    img.onload = ()=>{
+      ART_CACHE.set(slot, 'loaded');
+      // re-query (the original element may have re-rendered)
+      document.querySelectorAll(`[data-art-slot="${slot}"]`).forEach(target=>{
+        target.classList.remove('placeholder');
+        target.innerHTML = '';
+        const ix = new Image();
+        ix.src = `art-slots/${slot}.png`;
+        target.appendChild(ix);
+      });
+    };
+    img.onerror = ()=>{ ART_CACHE.set(slot, 'missing'); };
+    img.src = `art-slots/${slot}.png`;
+  });
+}
+
+function renderGame(){
+  const run = state.run;
+  if(!run) return;
+
+  const node = run.path[run.encounterIdx];
+  const enemy = ENEMIES.find(e=>e.id===node.enemyId);
+
+  // HUD
+  document.getElementById('hud-encounter').textContent = run.encounterIdx + 1;
+  document.getElementById('hud-hp').textContent = run.hp;
+  document.getElementById('hud-hp-fill').style.width = (100 * run.hp / run.maxHp) + '%';
+  const fluencyMult = 1 + Math.min(0.72, (run.fluency || 0) * 0.06);
+  document.getElementById('hud-fluency').textContent = '×' + fluencyMult.toFixed(2);
+  document.getElementById('deck-info').textContent = `deck: ${run.deck.length} / discard: ${run.discard.length}`;
+
+  // Enemy
+  document.getElementById('enemy-name').textContent = enemy.name;
+  document.getElementById('enemy-hp-text').textContent = `${run.enemyHp}/${run.enemyMaxHp}`;
+  document.getElementById('enemy-hp-fill').style.width = (100 * run.enemyHp / run.enemyMaxHp) + '%';
+  const portrait = document.getElementById('enemy-portrait');
+  portrait.setAttribute('data-art-slot', `enemy-${enemy.id}`);
+  portrait.setAttribute('data-glyph', enemy.glyph);
+  // Threat pips
+  const threatMeter = document.getElementById('threat-meter');
+  threatMeter.innerHTML = '';
+  for(let i=0;i<5;i++){
+    const pip = document.createElement('div');
+    pip.className = 'threat-pip' + (i < enemy.threat ? ' active' : '');
+    threatMeter.appendChild(pip);
+  }
+
+  // Spell slots
+  const slotsEl = document.getElementById('spell-slots');
+  slotsEl.innerHTML = '';
+  run.spell.forEach((id, i)=>{
+    const slot = document.createElement('div');
+    slot.className = 'spell-slot' + (id ? ' filled' : '');
+    slot.dataset.slot = i;
+    if(id){
+      const rune = RUNES.find(r=>r.id===id);
+      slot.innerHTML = runeCardHTML(rune);
+    } else {
+      slot.textContent = ['I','II','III'][i];
+    }
+    slot.onclick = ()=> handleSlotTap(i);
+    slotsEl.appendChild(slot);
+  });
+
+  // Synergy hints on slots
+  const present = run.spell.filter(Boolean).map(id => RUNES.find(r=>r.id===id));
+  if(present.length >= 2){
+    const elCounts = {};
+    const shCounts = {};
+    present.forEach(r=>{
+      elCounts[r.element] = (elCounts[r.element]||0)+1;
+      shCounts[r.shape] = (shCounts[r.shape]||0)+1;
+    });
+    const hasEl = Object.values(elCounts).some(v=>v>=2);
+    const hasSh = Object.values(shCounts).some(v=>v>=2);
+    [...slotsEl.children].forEach((sl,i)=>{
+      if(!run.spell[i]) return;
+      const r = RUNES.find(x=>x.id===run.spell[i]);
+      const elMatch = hasEl && elCounts[r.element] >= 2;
+      const shMatch = hasSh && shCounts[r.shape] >= 2;
+      if(elMatch && shMatch) sl.classList.add('synergy-both');
+      else if(elMatch) sl.classList.add('synergy-element');
+      else if(shMatch) sl.classList.add('synergy-shape');
+    });
+  }
+
+  // Spell readout
+  const dmg = previewSpellDamage();
+  document.getElementById('spell-damage').textContent = dmg > 0 ? dmg : '—';
+  document.getElementById('spell-formula').textContent = formulaText(present);
+
+  // Hand
+  const handEl = document.getElementById('hand-grid');
+  handEl.innerHTML = '';
+  run.hand.forEach((id, i)=>{
+    const rune = RUNES.find(r=>r.id===id);
+    const card = document.createElement('div');
+    card.innerHTML = runeCardHTML(rune);
+    const cardEl = card.firstElementChild;
+    cardEl.dataset.handIdx = i;
+    cardEl.onclick = ()=> handleHandTap(i);
+    cardEl.oncontextmenu = (e)=>{ e.preventDefault(); showTooltipFor(cardEl, rune); };
+    bindLongPress(cardEl, ()=> showTooltipFor(cardEl, rune));
+    handEl.appendChild(cardEl);
+  });
+
+  // Cast button
+  document.getElementById('btn-cast').disabled = present.length === 0;
+
+  // Try to hydrate any dropped art for runes/enemies
+  hydrateArt();
+}
+
+function formulaText(runes){
+  if(runes.length === 0) return '—';
+  return runes.map(r=>{
+    const el = r.element[0];
+    return `${el}·${r.basePower}`;
+  }).join(' + ');
+}
+
+function handleHandTap(handIdx){
+  const run = state.run;
+  const runeId = run.hand[handIdx];
+  if(!runeId) return;
+  const emptySlot = run.spell.indexOf(null);
+  if(emptySlot === -1) return;
+  run.spell[emptySlot] = runeId;
+  run.hand.splice(handIdx, 1);
+  renderGame();
+}
+
+function handleSlotTap(slotIdx){
+  const run = state.run;
+  if(run.spell[slotIdx]){
+    run.hand.push(run.spell[slotIdx]);
+    run.spell[slotIdx] = null;
+    renderGame();
+  }
+}
+
+function clearSpell(){
+  state.run.spell.forEach(id => { if(id) state.run.hand.push(id); });
+  state.run.spell = [null, null, null];
+  renderGame();
+}
+
+/* ----- 12. SCREENS ----- */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id === 'codex-screen') renderCodex();
+}
+
+function renderCodex(){
+  const stats = document.getElementById('codex-stats');
+  stats.innerHTML = `
+    <div class="codex-stat"><div class="value">${state.meta.discoveredRunes.length}/${RUNES.length}</div><div class="label">glyphs bound</div></div>
+    <div class="codex-stat"><div class="value">${Object.keys(state.meta.discoveredCombos).length}/${NAMED_COMBOS.length}</div><div class="label">fusions named</div></div>
+    <div class="codex-stat"><div class="value">${state.meta.runsCompleted}</div><div class="label">codices sealed</div></div>
+  `;
+  // combos
+  const cEl = document.getElementById('codex-combos');
+  cEl.innerHTML = '';
+  Object.entries(state.meta.discoveredCombos).forEach(([id, c])=>{
+    const el = document.createElement('div');
+    el.className = 'codex-combo';
+    const glyphs = c.runeIds.map(rid=>RUNES.find(r=>r.id===rid)?.glyph||'·').join(' ');
+    el.innerHTML = `
+      <div>
+        <div class="name">${c.name}</div>
+        <div class="glyphs">${glyphs}</div>
+      </div>
+      <div class="peak">${c.peakDamage}</div>
+    `;
+    cEl.appendChild(el);
+  });
+  if(Object.keys(state.meta.discoveredCombos).length === 0){
+    cEl.innerHTML = `<p style="font-family:'IM Fell English',serif;font-style:italic;color:var(--parchment-sh);text-align:center;padding:20px;">No fusions named yet. Spells that share elements or shapes may earn a name.</p>`;
+  }
+  // runes
+  const rEl = document.getElementById('codex-runes');
+  rEl.innerHTML = '';
+  RUNES.forEach(r=>{
+    if(state.meta.discoveredRunes.includes(r.id)){
+      const card = document.createElement('div');
+      card.innerHTML = runeCardHTML(r);
+      const el = card.firstElementChild;
+      bindLongPress(el, ()=>showTooltipFor(el, r));
+      el.onclick = ()=>showTooltipFor(el, r);
+      rEl.appendChild(el);
+    } else {
+      const locked = document.createElement('div');
+      locked.className = 'codex-rune-locked';
+      locked.textContent = '?';
+      rEl.appendChild(locked);
+    }
+  });
+}
+
+/* ----- 13. MODALS, TOOLTIPS, EFFECTS ----- */
+function showModal({title, body, icon, iconDefeat, choices}){
+  const m = document.getElementById('modal-content');
+  m.innerHTML = `
+    <div class="result-icon ${iconDefeat?'defeat':''}">${icon || '◆'}</div>
+    <h2>${title}</h2>
+    <p>${body}</p>
+    <div class="choices"></div>
+  `;
+  const list = m.querySelector('.choices');
+  (choices || []).forEach(c=>{
+    const b = document.createElement('button');
+    b.className = 'btn primary';
+    b.textContent = c.label;
+    b.onclick = c.onClick;
+    list.appendChild(b);
+  });
+  document.getElementById('modal-bg').classList.add('active');
+}
+function hideModal(){
+  document.getElementById('modal-bg').classList.remove('active');
+}
+
+function showTooltipFor(el, rune){
+  const t = document.getElementById('tooltip');
+  t.innerHTML = `
+    <span class="tt-name">${rune.name}</span>
+    ${rune.desc}
+    <span class="tt-tags">${rune.element.toUpperCase()} · ${rune.shape.toUpperCase()} · PWR ${rune.basePower} · ${rune.rarity.toUpperCase()}</span>
+  `;
+  t.style.display = 'block';
+  const r = el.getBoundingClientRect();
+  const tw = t.offsetWidth, th = t.offsetHeight;
+  let x = r.left + r.width/2 - tw/2;
+  let y = r.top - th - 10;
+  if(y < 8) y = r.bottom + 10;
+  x = Math.max(8, Math.min(window.innerWidth - tw - 8, x));
+  t.style.left = x + 'px';
+  t.style.top = y + 'px';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>{ t.style.display = 'none'; }, 2000);
+}
+
+function bindLongPress(el, fn){
+  let timer;
+  const start = ()=>{ timer = setTimeout(fn, 380); };
+  const cancel = ()=>{ clearTimeout(timer); };
+  el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchmove', cancel);
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', cancel);
+  el.addEventListener('mouseleave', cancel);
+}
+
+function showDamage(amount, crit){
+  const stage = document.getElementById('enemy-stage');
+  const r = stage.getBoundingClientRect();
+  const portrait = document.getElementById('enemy-portrait').getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'damage-pop' + (crit ? ' crit' : '');
+  pop.textContent = amount;
+  pop.style.left = (portrait.left + portrait.width/2 - r.left) + 'px';
+  pop.style.top = (portrait.top - r.top + portrait.height/2) + 'px';
+  stage.appendChild(pop);
+  setTimeout(()=>pop.remove(), 1200);
+}
+
+function showComboBanner(name, isNew){
+  const b = document.createElement('div');
+  b.className = 'combo-banner' + (isNew ? ' new' : '');
+  b.innerHTML = `
+    <div class="label">fusion</div>
+    <div class="name">${name}</div>
+  `;
+  document.body.appendChild(b);
+  setTimeout(()=>b.remove(), 1700);
+}
+
+/* ----- 13b. LINKS + SHARE (the funnel) -----
+   Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
+   the storefront CTAs stay hidden so nothing looks broken at launch. The
+   Share button works immediately and is the viral driver to that page. */
+const GF_LINKS = {
+  itch: ''   // e.g. 'https://stephen.itch.io/glyph-forge'
+};
+function gfShareText(){
+  const res = window._gfResult || {};
+  const daily = res.seed && /^daily-/.test(res.seed);
+  const tag = daily ? ('Daily Sigil ' + res.seed.replace('daily-','')) : 'a run';
+  const line = res.won ? 'inscribed the whole codex — 13/13 ✷'
+                       : ('fell at encounter ' + (res.reached || 1) + '/13');
+  return `Glyph Forge — ${tag}\nI ${line}.\nFuse runes. Find what shouldn't work.\n${location.origin}${location.pathname}`;
+}
+async function gfShare(){
+  const text = gfShareText();
+  if(navigator.share){
+    try{ await navigator.share({ title:'Glyph Forge', text }); }catch(e){}
+    return;
+  }
+  try{
+    await navigator.clipboard.writeText(text);
+    gfToast('Result copied — paste it anywhere');
+  }catch(e){
+    window.prompt('Copy your result:', text);
+  }
+}
+function gfToast(msg){
+  const t = document.createElement('div');
+  t.className = 'gf-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2200);
+}
+function gfOpenItch(){
+  if(GF_LINKS.itch) window.open(GF_LINKS.itch, '_blank', 'noopener');
+}
+
+/* ----- 14. EVENT WIRING ----- */
+document.getElementById('btn-new-run').onclick = ()=>{
+  startNewRun();
+  showScreen('game-screen');
+};
+document.getElementById('btn-continue').onclick = ()=>{
+  if(state.run){
+    showScreen('game-screen');
+    renderGame();
+  } else {
+    showModal({ title:'No Inscription', body:'There is no run to continue.', choices:[{label:'OK', onClick:hideModal}]});
+  }
+};
+document.getElementById('btn-codex').onclick = ()=>showScreen('codex-screen');
+document.getElementById('btn-codex-back').onclick = ()=>showScreen('title-screen');
+document.getElementById('btn-back-title').onclick = ()=>showScreen('title-screen');
+document.getElementById('btn-daily').onclick = ()=>{
+  const today = new Date().toISOString().slice(0,10);
+  startNewRun('daily-' + today);
+  showScreen('game-screen');
+};
+if(GF_LINKS.itch){
+  const il = document.getElementById('gf-itch-link');
+  il.href = GF_LINKS.itch;
+  il.hidden = false;
+}
+document.getElementById('btn-cast').onclick = cast;
+document.getElementById('btn-clear').onclick = clearSpell;
+document.getElementById('btn-flee').onclick = ()=>{
+  if(confirm('Abandon this inscription? Progress will be lost.')){
+    state.run = null;
+    saveState();
+    showScreen('title-screen');
+  }
+};
+
+/* hide modal on bg tap */
+document.getElementById('modal-bg').onclick = (e)=>{
+  if(e.target.id === 'modal-bg'){ /* keep modal locked unless explicit */ }
+};
+
+/* PWA install: register service worker if file present */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+/* Initial render */
+if(state.run){
+  // resume mid-run automatically
+  showScreen('game-screen');
+  renderGame();
+} else {
+  showScreen('title-screen');
+}
+hydrateArt();
+
+/* re-hydrate when changing screens */
+const _origShow = showScreen;
+window.showScreen = (id)=>{ _origShow(id); setTimeout(hydrateArt, 0); };
+
+/* expose for debugging */
+window.GLYPH_FORGE = { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell };
+</script>
+</body>
+</html>
