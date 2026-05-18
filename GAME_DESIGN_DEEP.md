@@ -194,8 +194,8 @@ seeds so daily-sigil determinism and the sim win-rate baseline don't drift.
 
 | Phase | Scope | Risk | Ships |
 |---|---|---|---|
-| **1. Tags + Combo Graph** | Add `tags[]` to 30 runes (pure data); append ~25 tag-based `NAMED_COMBOS` (enabler→engine→payoff); ability-words. No engine change → damage math byte-identical. | None | A pure discovery-depth boost; codex triples |
-| **2. The Two-Track Engine** | `ctx` gains `xmult`/ordered resolution; same-element/shape → XMULT; scarce state-scaling XMULT runes; bounded recursive retrigger. Re-baseline BALANCE.md. | High (core) | The depth ceiling; "build then detonate" |
+| **1. Tags + Combo Graph** ✅ SHIPPED | `tags[]` on all 32 runes; 22 tag-based `NAMED_COMBOS` appended (14→36). Math byte-identical. | None | Codex tripled; pure discovery depth |
+| **2. The Two-Track Engine** ✅ SHIPPED | `ctx.xmult` + ordered resolution; exponential element/shape → XMULT; Crescendo/Culminate order-dependent XMULT runes. BALANCE.md re-baselined (37%→41%). | High (core) | The depth ceiling; slot order = skill |
 | **3. Relics** | `ctx.relicHooks`, `run.relics`, `RELICS` data, relic-offer modal (offset seed). Inert when empty → baseline unchanged. | Med | Relics drop & reshape spells |
 | **4. Build Identity** | Run-start **Sigil** (bless+forbid) + curated pool weighting; **Champion Rune** 3-path locked tree; element-pair codex unlocks. | Med | Players sculpt a build |
 | **5. The Rune Web** | Per-run `run.progression` tree, "??? until bound" reveal, Prophecy steering, hidden transmutation families, silent breakpoints. | Med | The Neon-Abyss spine |
