@@ -936,6 +936,7 @@
       <button class="btn" id="btn-continue">Continue</button>
       <button class="btn" id="btn-codex">The Codex</button>
       <button class="btn small" id="btn-daily">Daily Sigil</button>
+      <button class="btn small" id="btn-howto">How to Play</button>
     </div>
     <a id="gf-itch-link" class="gf-itch-link" href="#" target="_blank" rel="noopener" hidden>Pay-what-you-want on itch.io ↗</a>
   </section>
@@ -1484,6 +1485,7 @@ function defaultState(){
       runsCompleted: 0,
       runsAttempted: 0,
       bestRun: 0,
+      seenIntro: false,
     },
     run: null,
   };
@@ -2329,6 +2331,27 @@ function hideModal(){
 }
 
 /* Phase 4: choose your Sigil (run identity) before a fresh run */
+function showIntro(){
+  const m = document.getElementById('modal-content');
+  m.innerHTML = `
+    <h2>How to Play</h2>
+    <div style="font-family:'IM Fell English',serif;color:var(--parchment-dk);font-size:14px;line-height:1.6;text-align:left;padding:4px 4px 12px;">
+      <p style="margin:0 0 8px;">Fight 13 foes, then a boss. Each turn you fuse runes into one spell:</p>
+      <p style="margin:0 0 6px;">① Tap up to <b>3 runes</b> from your hand — they fill slots <b>I · II · III</b>.</p>
+      <p style="margin:0 0 6px;">② <b>Order matters.</b> The gold number is live damage = POWER × XMULT.</p>
+      <p style="margin:0 0 6px;">③ Same <b>element</b> or <b>shape</b> multiplies hard — focus is power.</p>
+      <p style="margin:0 0 6px;">④ Tap <b>Inscribe</b> to cast. Survive, take a reward, repeat.</p>
+      <p style="margin:8px 0 0;color:var(--parchment-sh);">Your <b>Sigil</b> (picked at run start) blesses one element and seals another — that's your build. Casting a rune <b>binds</b> its element and reveals deeper runes. Combos you discover are named in the codex forever.</p>
+    </div>
+    <div class="choices" id="intro-choices"></div>`;
+  const list = m.querySelector('#intro-choices');
+  const b = document.createElement('button');
+  b.className = 'btn primary'; b.textContent = 'Begin';
+  b.onclick = ()=>{ state.meta.seenIntro = true; saveState(); hideModal(); };
+  list.appendChild(b);
+  document.getElementById('modal-bg').classList.add('active');
+}
+
 function chooseSigil(){
   const m = document.getElementById('modal-content');
   m.innerHTML = `<h2>Choose Your Sigil</h2>
@@ -2460,6 +2483,7 @@ document.getElementById('btn-continue').onclick = ()=>{
     showModal({ title:'No Inscription', body:'There is no run to continue.', choices:[{label:'OK', onClick:hideModal}]});
   }
 };
+document.getElementById('btn-howto').onclick = ()=>showIntro();
 document.getElementById('btn-codex').onclick = ()=>showScreen('codex-screen');
 document.getElementById('btn-codex-back').onclick = ()=>showScreen('title-screen');
 document.getElementById('btn-back-title').onclick = ()=>showScreen('title-screen');
@@ -2503,6 +2527,7 @@ if(state.run){
 } else {
   showScreen('title-screen');
 }
+if(!state.meta.seenIntro && !state.run) setTimeout(showIntro, 350);
 hydrateArt();
 
 /* re-hydrate when changing screens */
