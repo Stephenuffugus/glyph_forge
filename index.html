@@ -215,6 +215,20 @@
     border-bottom: 1px solid rgba(212,168,73,0.2);
     background: var(--ink-deep);
   }
+  .hud-depth {
+    flex-shrink: 0;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+    padding: 5px 16px;
+    background: var(--ink-mid);
+    border-bottom: 1px solid rgba(212,168,73,0.12);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.06em;
+    color: var(--parchment-sh);
+  }
+  .hud-depth .dchip { color: var(--gilt); }
+  .hud-depth .dchip b { color: var(--gilt-bright); font-weight: 700; }
+  .hud-depth .dchip.dim { color: var(--parchment-sh); }
+  .hud-depth .dprophecy.done { color: var(--verdigris); }
   .hud-left, .hud-right { display: flex; align-items: center; gap: 10px; }
   .hud-stat {
     font-family: 'IM Fell English', serif;
@@ -951,6 +965,7 @@
         <button class="btn icon small" id="btn-flee">⌫</button>
       </div>
     </div>
+    <div class="hud-depth" id="hud-depth"></div>
 
     <div class="enemy-stage" id="enemy-stage">
       <div class="enemy">
@@ -2096,6 +2111,28 @@ function renderGame(){
   const fluencyMult = 1 + Math.min(0.72, (run.fluency || 0) * 0.06);
   document.getElementById('hud-fluency').textContent = '×' + fluencyMult.toFixed(2);
   document.getElementById('deck-info').textContent = `deck: ${run.deck.length} / discard: ${run.discard.length}`;
+
+  // Depth status strip — make Sigil/relics/champion/prophecy/bound legible.
+  ensureRunDepth(run);
+  const dEl = document.getElementById('hud-depth');
+  if(dEl){
+    const sg = sigilOf(run);
+    const chips = [];
+    chips.push(`<span class="dchip">◈ <b>${sg.name}</b></span>`);
+    if(run.champion && CHAMPIONS[run.champion.id]){
+      chips.push(`<span class="dchip" title="${CHAMPIONS[run.champion.id].desc}">★ ${CHAMPIONS[run.champion.id].name} <b>Lv${run.champion.level||1}</b></span>`);
+    }
+    const rel = (run.relics||[]).map(id=>(RELICS.find(x=>x.id===id)||{}).name).filter(Boolean);
+    chips.push(`<span class="dchip${rel.length?'':' dim'}" title="${rel.join(' · ')||'no relics yet'}">⬡ relics <b>${rel.length}</b></span>`);
+    const pr = run.progression && run.progression.prophecy;
+    if(pr){
+      chips.push(`<span class="dchip dprophecy ${pr.done?'done':''}" title="Fulfil the named fusion '${pr.name}' for +12 HP">✦ ${pr.done?'prophecy ✓':'prophecy: '+pr.name}</span>`);
+    }
+    const bound = (run.boundElements||[]);
+    if(bound.length) chips.push(`<span class="dchip dim" title="Elements bound this run unlock their deeper runes">⛓ ${bound.join(' ')}</span>`);
+    if(sg.forbid && sg.forbid.length) chips.push(`<span class="dchip dim" title="Sealed by your Sigil — these runes deal 0">⊘ ${sg.forbid.join(' ')}</span>`);
+    dEl.innerHTML = chips.join('');
+  }
 
   // Enemy
   document.getElementById('enemy-name').textContent = enemy.name;
