@@ -1324,6 +1324,22 @@ const RELICS = [
   { id:'final-page',  name:'The Final Page',      rarity:'mythic',
     desc:'XMULT is squared. But you take +2 from every enemy hit.',
     phase:'post', hook:(ctx)=>{ ctx.xmult = ctx.xmult * ctx.xmult; } },
+  // Hidden transmutation rewards (never offered; granted by bound triads)
+  { id:'tx-fire',  name:'Wildfire Ascendant', rarity:'mythic', hidden:true,
+    desc:'Transmutation: every Fire rune +2 POWER.',
+    hook:(ctx)=>{ ctx.runes.forEach((r,i)=>{ if(r&&r.element==='Fire') ctx.runeMod[i].add+=2; }); } },
+  { id:'tx-order', name:'The Bound Law',      rarity:'mythic', hidden:true,
+    desc:'Transmutation: same-element XMULT ×1.5 extra.',
+    phase:'post', hook:(ctx)=>{ if(ctx._maxEl>=2) ctx.xmult*=1.5; } },
+  { id:'tx-void',  name:'The Open Void',      rarity:'mythic', hidden:true,
+    desc:'Transmutation: +0.5 flat XMULT per rune in hand.',
+    phase:'post', hook:(ctx)=>{ ctx.xmult += ctx.hand.length*0.5; } },
+];
+// Phase 5: hidden 3-rune families. Bind all members in one run -> transmute.
+const TRANSMUTATIONS = [
+  { id:'tx-fire',  name:'Wildfire Ascendant', members:['ember','surge','wildfire'] },
+  { id:'tx-order', name:'The Bound Law',      members:['tally','echo','recursion'] },
+  { id:'tx-void',  name:'The Open Void',      members:['hollow','sympathy','singularity'] },
 ];
 
 // ---- Phase 4: SIGILS — run-start identity (bless AND forbid) ----
@@ -1384,7 +1400,40 @@ function applyDepth(ctx, run, phase){
       try{ CHAMPIONS[run.champion.id].apply(ctx, run.champion.level||1); }catch(e){}
     }
     RELICS.forEach(rel=>{ if(run.relics.includes(rel.id) && rel.phase==='post'){ try{ rel.hook(ctx); }catch(e){} } });
+    // Phase 6: counter-boss — the Sovereign "reads" your dominant pattern and
+    // dampens a mono-element triple, forcing a second viable line for the climax.
+    const node = run.path && run.path[run.encounterIdx];
+    if(node && node.enemyId==='sovereign' && ctx._maxEl>=3) ctx.xmult *= 0.6;
   }
+}
+
+// Phase 5: called from cast() once a spell resolves. Binds elements, fires
+// hidden transmutations, and resolves the run prophecy.
+function onSpellBound(run, present, result){
+  ensureRunDepth(run);
+  present.forEach(r=>{ if(r && !run.boundElements.includes(r.element)) run.boundElements.push(r.element); });
+  const boundIds = new Set([...(run.progression._boundIds||[]), ...present.map(r=>r.id)]);
+  run.progression._boundIds = [...boundIds];
+  TRANSMUTATIONS.forEach(tx=>{
+    if(run.progression.transmuted.includes(tx.id)) return;
+    if(tx.members.every(m=>boundIds.has(m))){
+      run.progression.transmuted.push(tx.id);
+      if(!run.relics.includes(tx.id)) run.relics.push(tx.id);
+      showComboBanner('TRANSMUTED · ' + tx.name, true);
+    }
+  });
+  const pr = run.progression.prophecy;
+  if(pr && !pr.done && result.comboMatch && result.comboMatch.id===pr.id){
+    pr.done = true;
+    run.hp = Math.min(run.maxHp, run.hp + 12);
+    showComboBanner('PROPHECY FULFILLED · +12 HP', true);
+  }
+}
+function prophecyPick(run, rng){
+  const undiscovered = NAMED_COMBOS.filter(c=>!state.meta.discoveredCombos[c.id]);
+  const poolP = undiscovered.length ? undiscovered : NAMED_COMBOS;
+  const c = poolP[Math.floor((rng?rng():Math.random()) * poolP.length)];
+  return c ? { id:c.id, name:c.name, done:false } : null;
 }
 
 /* ----- 4. RNG (seeded) ----- */
@@ -1491,6 +1540,7 @@ function startNewRun(seedStr, sigilId){
     boundElements: [],
     castCount: 0,
   };
+  state.run.progression.prophecy = prophecyPick(state.run, mulberry32(seed + 999));
   state.meta.runsAttempted += 1;
   beginEncounter();
   saveState();
@@ -1573,7 +1623,7 @@ function resolveSpell(){
     hp: run.hp, maxHp: run.maxHp,
     hand: run.hand.slice(),
     deck: run.deck.slice(),
-    rng: mulberry32(run.rngSeed + run.encounterIdx*7919 + Date.now()%9999),
+    rng: mulberry32(run.rngSeed + run.encounterIdx*7919 + (run.castCount||0)),
     meta: { favoriteRune },
   };
 
@@ -1711,6 +1761,11 @@ function cast(){
     showComboBanner(result.comboMatch.name, isNew);
   }
 
+  // Phase 5/6: bind elements, fire transmutations/prophecy, advance the
+  // deterministic per-run cast counter (replaces Date.now seed entropy).
+  onSpellBound(run, result.presentRunes, result);
+  run.castCount = (run.castCount || 0) + 1;
+
   // discard used runes + reset spell
   run.spell.forEach((id,i)=>{
     if(id){
@@ -1824,6 +1879,13 @@ function showRewardModal(){
     pool = RUNES.filter(r => r.rarity === 'rare' || r.rarity === 'mythic');
   }
 
+  // Phase 5: progressive reveal — a deep (rare/mythic) rune only appears once
+  // you've BOUND its element this run (cast a spell containing it). Engaging a
+  // branch is what reveals the branch (Neon-Abyss). Sigil element is pre-bound.
+  ensureRunDepth(run);
+  const _bound = new Set([...(run.boundElements||[]), sigilOf(run).element].filter(Boolean));
+  pool = pool.filter(r => (r.rarity==='common'||r.rarity==='uncommon') || _bound.has(r.element));
+
   // Phase 4: curated pool — bias offers toward your Sigil's element so the
   // build identity can actually snowball (StS-style curated pools).
   const _sg = sigilOf(run);
@@ -1831,6 +1893,7 @@ function showRewardModal(){
     const boost = pool.filter(r=> r.element===_sg.element);
     pool = pool.concat(boost, boost); // ~3x weight for on-identity runes
   }
+  if(pool.length < 3) pool = RUNES.filter(r=> r.rarity==='common'||r.rarity==='uncommon'); // safety
 
   const offered = [];
   while(offered.length < 3 && pool.length > 0){
@@ -1863,7 +1926,7 @@ function showRewardModal(){
   // Phase 3: Relic offer at encounters 3, 6, 10 (idx 2, 5, 9)
   if([2,5,9].includes(run.encounterIdx)){
     const rrng = mulberry32(run.rngSeed + run.encounterIdx*31 + 777);
-    let rpool = RELICS.filter(x=>!run.relics.includes(x.id));
+    let rpool = RELICS.filter(x=>!x.hidden && !run.relics.includes(x.id) && (x.rarity!=='mythic' || state.meta.runsCompleted>=1));
     const rOffered = [];
     while(rOffered.length < 3 && rpool.length > 0){
       const i = Math.floor(rrng() * rpool.length);
@@ -2167,22 +2230,24 @@ function renderCodex(){
   // combos
   const cEl = document.getElementById('codex-combos');
   cEl.innerHTML = '';
-  Object.entries(state.meta.discoveredCombos).forEach(([id, c])=>{
+  const prophecyId = state.run && state.run.progression && state.run.progression.prophecy
+    ? state.run.progression.prophecy.id : null;
+  // Forward-looking codex: every named fusion is listed; undiscovered ones
+  // show as locked silhouettes so you can hunt them. Prophecy is starred.
+  NAMED_COMBOS.forEach(combo=>{
+    const c = state.meta.discoveredCombos[combo.id];
     const el = document.createElement('div');
     el.className = 'codex-combo';
-    const glyphs = c.runeIds.map(rid=>RUNES.find(r=>r.id===rid)?.glyph||'·').join(' ');
-    el.innerHTML = `
-      <div>
-        <div class="name">${c.name}</div>
-        <div class="glyphs">${glyphs}</div>
-      </div>
-      <div class="peak">${c.peakDamage}</div>
-    `;
+    const star = combo.id===prophecyId ? ' ✦' : '';
+    if(c){
+      const glyphs = c.runeIds.map(rid=>RUNES.find(r=>r.id===rid)?.glyph||'·').join(' ');
+      el.innerHTML = `<div><div class="name">${c.name}${star}</div><div class="glyphs">${glyphs}</div></div><div class="peak">${c.peakDamage}</div>`;
+    } else {
+      el.style.opacity = '0.45';
+      el.innerHTML = `<div><div class="name">??? ${combo.id===prophecyId?'· PROPHECY ✦':'· locked'}</div><div class="glyphs">▢ ▢ ▢</div></div><div class="peak">—</div>`;
+    }
     cEl.appendChild(el);
   });
-  if(Object.keys(state.meta.discoveredCombos).length === 0){
-    cEl.innerHTML = `<p style="font-family:'IM Fell English',serif;font-style:italic;color:var(--parchment-sh);text-align:center;padding:20px;">No fusions named yet. Spells that share elements or shapes may earn a name.</p>`;
-  }
   // runes
   const rEl = document.getElementById('codex-runes');
   rEl.innerHTML = '';
