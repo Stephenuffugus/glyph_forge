@@ -18,6 +18,24 @@ Every image you add just upgrades a placeholder. **Nothing here blocks launch** 
 
 ---
 
+# 🎯 STYLE LOCK — generate these 4 FIRST (do not batch yet)
+
+These 4 span the entire visual range. Generate them, drop them in `art-slots/`,
+look at them **in the running game at real size**, and decide if the look is
+right. Adjust the shared style words once, here, then everything else inherits a
+locked style. Don't generate the other 35 until these 4 feel right together.
+
+1. `art-slots/title-mark.png` — the logo (sets the whole brand) — prompt = **A1** below
+2. `art-slots/rune-ember.png` — simplest common rune (the everyday card look) — prompt = **A3** below
+3. `art-slots/rune-aurora.png` — most ornate mythic (the high-end + glow rule) — prompt in **Batch C → Mythic**
+4. `art-slots/enemy-sovereign.png` — the portrait style + marquee image — prompt = **A2** below
+
+If all 4 read as one cohesive codex at thumbnail and full size → style locked,
+proceed to Batch A. If not, tweak the recurring phrases (`dark academia, gold
+leaf accents, alchemical grimoire style ...`) and regenerate just these 4.
+
+---
+
 # ⭐ BATCH A — THE LAUNCH SET (14 images) — do these first
 
 After Batch A the whole first act is illustrated and the store page has hero art.

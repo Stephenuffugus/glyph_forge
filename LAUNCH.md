@@ -63,6 +63,21 @@ act + store hero art is illustrated. Drop PNGs in `art-slots/`, run
 
 ---
 
+## 🧪 Playtest sandbox (for tuning balance/abilities)
+
+Hidden, never shown to real players (gated to localhost / `*.app.github.dev`,
+or `localStorage.gfDev='1'`). On your dev URL:
+
+- Press **` (backtick)** or tap the **⚙ dev** badge (bottom-left) to open.
+- Jump to any encounter (auto-sets fluency to match — important, fluency
+  drives late-game balance), Full HP / set HP / set fluency, set enemy HP,
+  "Defeat enemy →" (runs the real reward flow), add any rune to hand,
+  reveal/wipe codex, and a **live damage-math breakdown** that decomposes
+  every spell: per-rune `(base+add)×mult×repeats`, synergy/shape/fluency
+  multipliers, final. Use it to find broken combos and tune `BALANCE.md`.
+
+It's inert in the public build, so it ships safely as-is.
+
 ## v1.1 backlog (after money starts)
 
 - SFX (ink scratch / page turn / chime) — hooks noted in README.

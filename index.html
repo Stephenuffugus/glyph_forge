@@ -1433,6 +1433,7 @@ function resolveSpell(){
   // damage tally
   let totalDamage = 0;
   let totalLifesteal = 0;
+  const _tr = [];
   ctx.runes.forEach((r,i)=>{
     if(!r) return;
     const mod = ctx.runeMod[i];
@@ -1440,17 +1441,21 @@ function resolveSpell(){
     const repeatedDmg = perRune * Math.max(1, mod.repeats);
     totalDamage += repeatedDmg;
     if(mod.lifesteal > 0) totalLifesteal += repeatedDmg * mod.lifesteal;
+    _tr.push({ id:r.id, name:r.name, base:r.basePower, add:mod.add, mult:mod.mult, repeats:Math.max(1,mod.repeats), sub:repeatedDmg });
   });
 
   // pandemonium adds hand-rune base power
   totalDamage += pandemoniumBonus;
+  const _baseSum = totalDamage;
 
   totalDamage *= ctx.globalMult;
+  const _spellRetrigger = ctx.spellRetrigger;
   if(ctx.spellRetrigger > 0) totalDamage *= (1 + ctx.spellRetrigger);
 
   // Fluency: the player learns. Each defeated enemy permanently boosts damage by +6%, cap +72%.
   const fluencyMult = 1 + Math.min(0.72, (run.fluency || 0) * 0.06);
   totalDamage *= fluencyMult;
+  const _preFloor = totalDamage;
   totalDamage = Math.floor(totalDamage);
 
   // combo detection
@@ -1470,6 +1475,9 @@ function resolveSpell(){
     comboMatch,
     presentRunes: present,
     crit: elementMult * shapeMult >= 2,
+    trace: { perRune:_tr, pandemoniumBonus, baseSum:_baseSum, elementMult, shapeMult,
+             globalMult:ctx.globalMult, spellRetrigger:_spellRetrigger, fluencyMult,
+             preFloor:_preFloor, final:totalDamage },
   };
 }
 
@@ -2125,6 +2133,123 @@ window.showScreen = (id)=>{ _origShow(id); setTimeout(hydrateArt, 0); };
 
 /* expose for debugging */
 window.GLYPH_FORGE = { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell };
+
+/* ===== DEV SANDBOX — gated; inert for normal players ======================
+   Toggle: backtick key (`) or click the tiny "⚙ dev" badge (bottom-left).
+   Active only on localhost / *.app.github.dev, OR if you run
+   localStorage.gfDev='1' once on any host. Real players never see it. */
+(function(){
+  let GF_DEV=false;
+  try{
+    const h=location.hostname;
+    GF_DEV = h===''||h==='localhost'||h==='127.0.0.1'
+      || /\.app\.github\.dev$/.test(h) || /\.github\.dev$/.test(h)
+      || /\.gitpod\.io$/.test(h) || localStorage.getItem('gfDev')==='1';
+  }catch(e){}
+  if(!GF_DEV) return;
+
+  const css=`
+  #gf-badge{position:fixed;left:8px;bottom:8px;z-index:99998;font:11px/1 monospace;
+   color:#d4a849;background:rgba(10,7,5,.8);border:1px solid #5a4a2e;border-radius:4px;
+   padding:5px 8px;cursor:pointer;opacity:.5;letter-spacing:.08em;user-select:none}
+  #gf-badge:hover{opacity:1}
+  #gf-panel{position:fixed;left:8px;right:8px;bottom:40px;max-height:72vh;overflow:auto;
+   z-index:99999;display:none;background:rgba(8,6,4,.97);border:1px solid #6b1d1d;
+   border-radius:6px;color:#e8dcc3;font:12px/1.45 monospace;padding:12px;box-shadow:0 10px 40px #000}
+  #gf-panel.open{display:block}
+  #gf-panel h4{margin:12px 0 6px;color:#f0c46a;font-size:11px;letter-spacing:.12em;
+   text-transform:uppercase;border-bottom:1px solid #3a2e1c;padding-bottom:3px}
+  #gf-panel h4:first-child{margin-top:0}
+  #gf-panel button{background:#1f1810;color:#e8dcc3;border:1px solid #5a4a2e;border-radius:3px;
+   padding:5px 8px;margin:2px;cursor:pointer;font:11px monospace}
+  #gf-panel button:hover{border-color:#d4a849;color:#f0c46a}
+  #gf-panel button.q{background:#2a1414;border-color:#6b1d1d}
+  #gf-panel input{width:64px;background:#14100b;color:#e8dcc3;border:1px solid #5a4a2e;
+   border-radius:3px;padding:4px;font:11px monospace}
+  #gf-panel .grid{display:flex;flex-wrap:wrap;gap:2px}
+  #gf-panel .rar{color:#8a7a5e;width:100%;margin-top:4px}
+  #gf-bd{white-space:pre;background:#0f0c08;border:1px solid #3a2e1c;border-radius:3px;
+   padding:8px;margin-top:4px;font-size:11px;color:#c9b896}
+  #gf-bd b{color:#f0c46a}
+  #gf-x{float:right;color:#a83232;cursor:pointer}`;
+  const st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
+  const badge=document.createElement('div'); badge.id='gf-badge'; badge.textContent='⚙ dev';
+  const panel=document.createElement('div'); panel.id='gf-panel';
+  document.body.appendChild(badge); document.body.appendChild(panel);
+
+  let open=false,timer=null;
+  function ensureRun(){ if(!state.run) startNewRun(); showScreen('game-screen'); }
+  function num(id){ const v=parseInt((document.getElementById(id)||{}).value,10); return isNaN(v)?null:v; }
+  function fmt(n){ return Math.round(n*100)/100; }
+  function rebuild(){
+    const rar={common:[],uncommon:[],rare:[],mythic:[]};
+    RUNES.forEach(r=>{ (rar[r.rarity]=rar[r.rarity]||[]).push(r); });
+    const runeBtns=Object.keys(rar).map(k=>`<div class="rar">${k}</div><div class="grid">`+
+      rar[k].map(r=>`<button data-rune="${r.id}">${r.name}</button>`).join('')+`</div>`).join('');
+    const encBtns=Array.from({length:13},(_,i)=>`<button data-enc="${i}">${i+1}${i===12?'★':''}</button>`).join('');
+    panel.innerHTML=`<span id="gf-x">✕ close</span><h4>Run</h4>`+
+      `<button class="q" data-act="newrun">New run</button>`+
+      `<button class="q" data-act="newdaily">New daily</button>`+
+      `<h4>Jump to encounter (★=boss, sets fluency to match)</h4><div class="grid">${encBtns}</div>`+
+      `<h4>Player</h4><button data-act="fullhp">Full HP</button> HP <input id="gf-hp" type="number">`+
+      ` <button data-act="sethp">set</button> &nbsp; fluency <input id="gf-fl" type="number">`+
+      ` <button data-act="setfl">set</button>`+
+      `<h4>Enemy</h4>enemy HP <input id="gf-ehp" type="number"> <button data-act="setehp">set</button>`+
+      ` <button class="q" data-act="kill">Defeat enemy →</button>`+
+      `<h4>Add rune to hand</h4>${runeBtns}`+
+      `<h4>Codex</h4><button data-act="revealcombos">Reveal all combos</button>`+
+      `<button class="q" data-act="wipecodex">Wipe codex</button>`+
+      `<h4>Live damage breakdown</h4><div id="gf-bd">build a spell to see the math</div>`;
+  }
+  function act(a){
+    if(a==='newrun'){ startNewRun(); showScreen('game-screen'); }
+    else if(a==='newdaily'){ startNewRun('daily-'+new Date().toISOString().slice(0,10)); showScreen('game-screen'); }
+    else if(a==='fullhp'){ ensureRun(); state.run.hp=state.run.maxHp; saveState(); renderGame(); }
+    else if(a==='sethp'){ ensureRun(); const v=num('gf-hp'); if(v!=null){ state.run.hp=Math.max(1,Math.min(state.run.maxHp,v)); saveState(); renderGame(); } }
+    else if(a==='setfl'){ ensureRun(); const v=num('gf-fl'); if(v!=null){ state.run.fluency=Math.max(0,v); saveState(); renderGame(); } }
+    else if(a==='setehp'){ ensureRun(); const v=num('gf-ehp'); if(v!=null){ state.run.enemyHp=Math.max(0,v); saveState(); renderGame(); } }
+    else if(a==='kill'){ ensureRun(); state.run.enemyHp=0; saveState(); renderGame();
+      if(state.run.encounterIdx===12) onVictory(); else onEnemyDefeated(); }
+    else if(a==='revealcombos'){ NAMED_COMBOS.forEach(c=>{ if(!state.meta.discoveredCombos[c.id])
+      state.meta.discoveredCombos[c.id]={name:c.name,peakDamage:0,runeIds:[],firstSeen:Date.now()}; });
+      saveState(); if(document.getElementById('codex-screen').classList.contains('active')) renderCodex(); }
+    else if(a==='wipecodex'){ state.meta.discoveredCombos={}; state.meta.discoveredRunes=[]; saveState();
+      if(document.getElementById('codex-screen').classList.contains('active')) renderCodex(); }
+  }
+  panel.addEventListener('click',e=>{
+    const t=e.target;
+    if(t.id==='gf-x'){ toggle(false); return; }
+    if(t.dataset.act){ act(t.dataset.act); }
+    else if(t.dataset.enc!=null){ ensureRun(); const i=+t.dataset.enc;
+      state.run.encounterIdx=i; state.run.fluency=i; beginEncounter(); showScreen('game-screen'); }
+    else if(t.dataset.rune){ ensureRun(); state.run.hand.push(t.dataset.rune); saveState(); renderGame(); }
+  });
+  function refreshBD(){
+    const bd=document.getElementById('gf-bd'); if(!bd) return;
+    if(!state.run){ bd.textContent='no active run'; return; }
+    let res=null; try{ res=resolveSpell(); }catch(e){ bd.textContent='—'; return; }
+    if(!res||!res.trace){ bd.textContent='build a spell to see the math'; return; }
+    const tr=res.trace;
+    let s=tr.perRune.map(p=>`${(p.name||'').padEnd(12)} (${p.base}+${p.add})×${fmt(p.mult)}×${p.repeats} = ${fmt(p.sub)}`).join('\n');
+    if(tr.pandemoniumBonus) s+=`\n+ pandemonium hand   = ${tr.pandemoniumBonus}`;
+    s+=`\nbase sum             = ${fmt(tr.baseSum)}`;
+    s+=`\n× element synergy    ×${fmt(tr.elementMult)}`;
+    s+=`\n× shape resonance    ×${fmt(tr.shapeMult)}`;
+    if(tr.spellRetrigger) s+=`\n× retrigger          ×${fmt(1+tr.spellRetrigger)}`;
+    s+=`\n× fluency            ×${fmt(tr.fluencyMult)}`;
+    s+=`\n= ${fmt(tr.preFloor)}  →  FINAL ${tr.final}`;
+    if(res.comboMatch) s+=`\ncombo → ${res.comboMatch.name}`;
+    bd.innerHTML=`<b>${tr.final}</b> damage\n`+s;
+  }
+  function toggle(v){
+    open=(v===undefined)?!open:v;
+    if(open){ rebuild(); panel.classList.add('open'); refreshBD(); timer=setInterval(refreshBD,180); }
+    else { panel.classList.remove('open'); clearInterval(timer); }
+  }
+  badge.addEventListener('click',()=>toggle());
+  window.addEventListener('keydown',e=>{ if(e.key==='`'||e.key==='~'){ e.preventDefault(); toggle(); } });
+  console.log('%cGlyph Forge DEV sandbox — press ` (backtick) or click ⚙ dev (bottom-left)','color:#d4a849;font-weight:bold');
+})();
 </script>
 </body>
 </html>
