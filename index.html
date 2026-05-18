@@ -1292,6 +1292,101 @@ function findComboName(spellRunes){
   return null;
 }
 
+/* ============================================================
+   DEPTH SYSTEMS (Phases 3-6): relics, sigils, champion,
+   the Rune Web (progressive reveal), counter-boss.
+   Additive & save-tolerant: ensureRunDepth() lazily defaults
+   missing run.* fields so old saves and the sim harness (bare
+   run literals) keep working, and a run with no sigil/relics/
+   progression resolves byte-identical to the Phase-2 baseline.
+   ============================================================ */
+
+// ---- Phase 3: RELICS — passive hooks into the spell pipeline ----
+const RELICS = [
+  { id:'inkwell',     name:'The Eternal Inkwell', rarity:'common',
+    desc:'+2 POWER to the first rune in every spell.',
+    hook:(ctx)=>{ if(ctx.runeMod[0]) ctx.runeMod[0].add += 2; } },
+  { id:'gilded-leaf', name:'Gilded Leaf',         rarity:'common',
+    desc:'+0.4 XMULT if the spell uses 3 runes.',
+    phase:'post', hook:(ctx)=>{ if(ctx.runes.filter(Boolean).length===3) ctx.xmult += 0.4; } },
+  { id:'ashen-quill', name:'Ashen Quill',         rarity:'uncommon',
+    desc:'Fire & Chaos runes deal ×1.5 in their slot.',
+    hook:(ctx)=>{ ctx.runes.forEach((r,i)=>{ if(r&&(r.element==='Fire'||r.element==='Chaos')) ctx.runeMod[i].mult*=1.5; }); } },
+  { id:'hourglass',   name:'Broken Hourglass',    rarity:'uncommon',
+    desc:'+0.25 XMULT per rune in your hand.',
+    phase:'post', hook:(ctx)=>{ ctx.xmult *= 1 + ctx.hand.length*0.25; } },
+  { id:'serpent-coil',name:"Serpent's Coil",      rarity:'rare',
+    desc:'Order-dependent runes scale 60% harder.',
+    hook:(ctx)=>{ ctx.xmultScaleBoost *= 1.6; } },
+  { id:'unseen-hand', name:'The Unseen Hand',     rarity:'rare',
+    desc:'Same-element triples gain an extra ×1.5 XMULT.',
+    phase:'post', hook:(ctx)=>{ if(ctx._maxEl>=3) ctx.xmult *= 1.5; } },
+  { id:'final-page',  name:'The Final Page',      rarity:'mythic',
+    desc:'XMULT is squared. But you take +2 from every enemy hit.',
+    phase:'post', hook:(ctx)=>{ ctx.xmult = ctx.xmult * ctx.xmult; } },
+];
+
+// ---- Phase 4: SIGILS — run-start identity (bless AND forbid) ----
+const SIGILS = [
+  { id:'free',  name:'Free Inscription', desc:'No bond, no ban. The classic codex.',
+    forbid:[], maxHp:50 },
+  { id:'ember', name:'The Emberheart', desc:'Fire runes +2 POWER. Water runes are sealed (deal 0).',
+    element:'Fire', forbid:['Water'], maxHp:50, champion:'pyre-heart',
+    boon:(ctx)=>{ ctx.runes.forEach((r,i)=>{ if(r&&r.element==='Fire') ctx.runeMod[i].add+=2; }); } },
+  { id:'order', name:'The Clockwork Vow', desc:'Same-element XMULT ×1.4 extra. Chaos runes are sealed.',
+    element:'Order', forbid:['Chaos'], maxHp:50, champion:'true-name',
+    boon:(ctx)=>{ if(ctx._maxEl>=2) ctx.xmult *= 1.4; } },
+  { id:'void',  name:'The Hungering Maw', desc:'All XMULT ×1.3. You start at 38 HP. Light runes are sealed.',
+    element:'Void', forbid:['Light'], maxHp:38, champion:'event-horizon',
+    boon:(ctx)=>{ ctx.xmult *= 1.3; }, phase:'post' },
+];
+// Champion: a Sigil-bound signature power that LEVELS at encounters 4/8/12
+// (Monster-Train style). No slottable rune — it's a scaling identity boon, so
+// there is no rune-resolution / deck / art surface to break.
+const CHAMPIONS = {
+  'pyre-heart':    { name:'Pyre Heart',
+    desc:'Champion: if the spell has any Fire rune, globalMult ×(1 + 0.6 × level).',
+    apply:(ctx,lvl)=>{ if(ctx.runes.some(r=>r&&r.element==='Fire')) ctx.globalMult *= 1 + 0.6*lvl; } },
+  'true-name':     { name:'The True Name',
+    desc:'Champion: if the spell is mono-element, XMULT ×(1 + level).',
+    apply:(ctx,lvl)=>{ if(ctx._maxEl>=ctx._runeCt && ctx._runeCt>=2) ctx.xmult *= 1 + lvl; } },
+  'event-horizon': { name:'Event Horizon',
+    desc:'Champion: XMULT ×(1 + level × 0.4 × handSize / 5).',
+    apply:(ctx,lvl)=>{ ctx.xmult *= 1 + lvl*0.4*(ctx.hand.length/5); } },
+};
+const CHAMPION_UPS = {
+  'pyre-heart':    ['Level up (+1)', 'Level up & +1 to all Fire runes'],
+  'true-name':     ['Level up (+1)', 'Level up & mono-shape also qualifies'],
+  'event-horizon': ['Level up (+1)', 'Level up & +0.3 flat XMULT'],
+};
+
+function ensureRunDepth(run){
+  if(!run) return;
+  if(!run.relics) run.relics = [];
+  if(run.sigil === undefined) run.sigil = 'free';
+  if(run.champion === undefined) run.champion = null;
+  if(!run.progression) run.progression = { bound:[], revealed:[], prophecy:null, transmuted:[] };
+  if(!run.boundElements) run.boundElements = [];
+  if(typeof run.castCount !== 'number') run.castCount = 0;
+}
+function sigilOf(run){ return SIGILS.find(s=>s.id===(run&&run.sigil))||SIGILS[0]; }
+// Depth hooks merged into the spell pipeline. 'pre' runs before the tally
+// (POWER edits); 'post' runs after element/shape synergy (XMULT edits).
+function applyDepth(ctx, run, phase){
+  ensureRunDepth(run);
+  const sg = sigilOf(run);
+  if(phase==='pre'){
+    ctx.runes.forEach((r,i)=>{ if(r && sg.forbid && sg.forbid.includes(r.element)) ctx.runeMod[i].mult = 0; });
+    RELICS.forEach(rel=>{ if(run.relics.includes(rel.id) && (rel.phase||'pre')==='pre'){ try{ rel.hook(ctx); }catch(e){} } });
+  } else {
+    if(sg.boon){ try{ sg.boon(ctx); }catch(e){} }
+    if(run.champion && CHAMPIONS[run.champion.id]){
+      try{ CHAMPIONS[run.champion.id].apply(ctx, run.champion.level||1); }catch(e){}
+    }
+    RELICS.forEach(rel=>{ if(run.relics.includes(rel.id) && rel.phase==='post'){ try{ rel.hook(ctx); }catch(e){} } });
+  }
+}
+
 /* ----- 4. RNG (seeded) ----- */
 function mulberry32(seed){
   let s = seed >>> 0;
@@ -1342,7 +1437,8 @@ function saveState(){
 }
 
 /* ----- 6. RUN INIT ----- */
-function startNewRun(seedStr){
+function startNewRun(seedStr, sigilId){
+  const sg = SIGILS.find(s=>s.id===sigilId) || SIGILS[0];
   const seed = hashString(seedStr || (Date.now() + ':' + Math.random()));
   const rng = mulberry32(seed);
 
@@ -1374,8 +1470,8 @@ function startNewRun(seedStr){
     seed: seedStr || String(seed),
     rngSeed: seed,
     encounterIdx: 0,
-    hp: 50,
-    maxHp: 50,
+    hp: sg.maxHp || 50,
+    maxHp: sg.maxHp || 50,
     deck: starterDeck.slice(),
     hand: [],
     discard: [],
@@ -1386,7 +1482,14 @@ function startNewRun(seedStr){
     enemyMaxHp: 0,
     burns: 0,
     stunNext: false,
-    fluency: 0, // each defeated enemy adds +0.10 to a global damage multiplier (cap 2.20x)
+    fluency: 0,
+    // ---- Depth (Phases 3-6) ----
+    sigil: sg.id,
+    relics: [],
+    champion: sg.champion ? { id: sg.champion, level: 1, path: 0 } : null,
+    progression: { bound:[], revealed:[], prophecy:null, transmuted:[] },
+    boundElements: [],
+    castCount: 0,
   };
   state.meta.runsAttempted += 1;
   beginEncounter();
@@ -1395,6 +1498,7 @@ function startNewRun(seedStr){
 
 function beginEncounter(){
   const run = state.run;
+  ensureRunDepth(run);
   const node = run.path[run.encounterIdx];
   const enemy = ENEMIES.find(e=>e.id===node.enemyId);
   // scale boss / late enemies slightly with progression
@@ -1455,6 +1559,8 @@ function resolveSpell(){
     runeMod: runeObjs.map(()=>({ mult:1, add:0, repeats:1, lifesteal:0 })),
     globalMult: 1,
     xmult: 1,          // Phase 2: multiplicative payoff track (synergy + order-dependent runes)
+    xmultScaleBoost: 1,// Phase 3: relics can amplify order-dependent rune scaling
+    _maxEl: 0, _runeCt: 0,
     healSelf: 0,
     bonusDraw: 0,
     spellRetrigger: 0,
@@ -1470,6 +1576,9 @@ function resolveSpell(){
     rng: mulberry32(run.rngSeed + run.encounterIdx*7919 + Date.now()%9999),
     meta: { favoriteRune },
   };
+
+  // Phase 3/4: relics + sigil seal + pre-tally hooks
+  applyDepth(ctx, run, 'pre');
 
   // pass 1: each rune applies its effect in order
   runeObjs.forEach((r,i)=>{
@@ -1500,6 +1609,9 @@ function resolveSpell(){
   const shapeMult = maxSh >= 3 ? 2.0 : maxSh === 2 ? 1.3 : 1;
 
   ctx.xmult *= elementMult * shapeMult;
+  ctx._maxEl = maxEl; ctx._runeCt = present.length;
+  // Phase 3/4: sigil boon + champion + post-synergy relics (XMULT track)
+  applyDepth(ctx, run, 'post');
 
   // damage tally
   let totalDamage = 0;
@@ -1511,7 +1623,7 @@ function resolveSpell(){
     const mod = ctx.runeMod[i];
     // Order-dependent XMULT: a rune's payoff scales off everything inscribed
     // before it, so placement (slot I/II/III) is a skill expression.
-    if(r.xmultScale) ctx.xmult *= 1 + _baseBefore * r.xmultScale;
+    if(r.xmultScale) ctx.xmult *= 1 + _baseBefore * r.xmultScale * (ctx.xmultScaleBoost||1);
     if(r.xmultFlat)  ctx.xmult *= r.xmultFlat;
     const perRune = (r.basePower + mod.add) * mod.mult;
     const repeatedDmg = perRune * Math.max(1, mod.repeats);
@@ -1641,8 +1753,9 @@ function enemyTurn(stunned){
     return;
   }
   const enemy = ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId);
-  // simple attack: deal threat damage
-  const dmg = enemy.threat;
+  // simple attack: deal threat damage (+2 if the glass-cannon relic is bound)
+  let dmg = enemy.threat;
+  if(run.relics && run.relics.includes('final-page')) dmg += 2;
   run.hp = Math.max(0, run.hp - dmg);
   saveState();
   renderGame();
@@ -1711,6 +1824,14 @@ function showRewardModal(){
     pool = RUNES.filter(r => r.rarity === 'rare' || r.rarity === 'mythic');
   }
 
+  // Phase 4: curated pool — bias offers toward your Sigil's element so the
+  // build identity can actually snowball (StS-style curated pools).
+  const _sg = sigilOf(run);
+  if(_sg && _sg.element){
+    const boost = pool.filter(r=> r.element===_sg.element);
+    pool = pool.concat(boost, boost); // ~3x weight for on-identity runes
+  }
+
   const offered = [];
   while(offered.length < 3 && pool.length > 0){
     const idx = Math.floor(rng() * pool.length);
@@ -1725,6 +1846,37 @@ function showRewardModal(){
   if(isBoss){
     // boss completed = win
     return onVictory();
+  }
+
+  const advance = ()=>{ run.encounterIdx += 1; hideModal(); beginEncounter(); };
+
+  // Phase 4: Champion level-up at encounters 4 & 8 (idx 3 & 7)
+  if(run.champion && (run.encounterIdx === 3 || run.encounterIdx === 7)){
+    const ch = CHAMPIONS[run.champion.id];
+    const ups = CHAMPION_UPS[run.champion.id] || ['Level up (+1)'];
+    return renderPickModal(`${ch.name} Awakens`, ch.desc, ups.map((label,i)=>({
+      name: label, desc: `Champion level ${ (run.champion.level||1) } → ${ (run.champion.level||1)+1 }`,
+      tags: 'champion', onClick: ()=>{ run.champion.level = (run.champion.level||1)+1; run.champion.path = i; advance(); }
+    })));
+  }
+
+  // Phase 3: Relic offer at encounters 3, 6, 10 (idx 2, 5, 9)
+  if([2,5,9].includes(run.encounterIdx)){
+    const rrng = mulberry32(run.rngSeed + run.encounterIdx*31 + 777);
+    let rpool = RELICS.filter(x=>!run.relics.includes(x.id));
+    const rOffered = [];
+    while(rOffered.length < 3 && rpool.length > 0){
+      const i = Math.floor(rrng() * rpool.length);
+      rOffered.push(rpool[i]); rpool = rpool.filter((_,k)=>k!==i);
+    }
+    if(rOffered.length){
+      return renderPickModal('A Relic Surfaces', 'Bind one. It reshapes every spell for the rest of the run.',
+        rOffered.map(rel=>({
+          name: rel.name, desc: rel.desc, tags: `relic · ${rel.rarity}`,
+          onClick: ()=>{ run.relics.push(rel.id); advance(); }
+        })).concat([{ name:'Mend The Vellum', desc:'Skip. Restore 10 HP.', tags:'heal',
+          onClick: ()=>{ run.hp = Math.min(run.maxHp, run.hp + 10); advance(); } }]));
+    }
   }
 
   const choices = offered.map(r => ({
@@ -1751,6 +1903,27 @@ function showRewardModal(){
   });
 
   renderRewardModal(choices);
+}
+
+/* Phase 3/4: generic card-list picker (relics, champion, etc.) */
+function renderPickModal(title, subtitle, items){
+  const modal = document.getElementById('modal-content');
+  modal.innerHTML = `<h2>${title}</h2><p>${subtitle}</p><div class="choices" id="reward-choices"></div>`;
+  const list = modal.querySelector('#reward-choices');
+  items.forEach(it=>{
+    const el = document.createElement('div');
+    el.className = 'reward-rune';
+    el.innerHTML = `
+      <div class="rune" style="display:grid;place-items:center;font-size:22px;color:var(--gilt);">◆</div>
+      <div class="reward-rune-info">
+        <span class="name">${it.name}</span>
+        <span class="desc">${it.desc}</span>
+        <span class="tags">${it.tags||''}</span>
+      </div>`;
+    el.onclick = it.onClick;
+    list.appendChild(el);
+  });
+  document.getElementById('modal-bg').classList.add('active');
 }
 
 function renderRewardModal(choices){
@@ -2053,6 +2226,31 @@ function hideModal(){
   document.getElementById('modal-bg').classList.remove('active');
 }
 
+/* Phase 4: choose your Sigil (run identity) before a fresh run */
+function chooseSigil(){
+  const m = document.getElementById('modal-content');
+  m.innerHTML = `<h2>Choose Your Sigil</h2>
+    <p>Your bond shapes the whole run. Some power is given; some is sealed away.</p>
+    <div class="choices" id="sigil-choices"></div>`;
+  const list = m.querySelector('#sigil-choices');
+  SIGILS.forEach(s=>{
+    const forb = (s.forbid&&s.forbid.length) ? ` · seals ${s.forbid.join('/')}` : '';
+    const champ = s.champion && CHAMPIONS[s.champion] ? ` · Champion: ${CHAMPIONS[s.champion].name}` : '';
+    const el = document.createElement('div');
+    el.className = 'reward-rune';
+    el.innerHTML = `
+      <div class="rune" style="display:grid;place-items:center;font-size:26px;color:var(--gilt);">${s.element?s.element[0]:'∅'}</div>
+      <div class="reward-rune-info">
+        <span class="name">${s.name}</span>
+        <span class="desc">${s.desc}</span>
+        <span class="tags">${(s.maxHp||50)} HP${forb}${champ}</span>
+      </div>`;
+    el.onclick = ()=>{ hideModal(); startNewRun(undefined, s.id); showScreen('game-screen'); };
+    list.appendChild(el);
+  });
+  document.getElementById('modal-bg').classList.add('active');
+}
+
 function showTooltipFor(el, rune){
   const t = document.getElementById('tooltip');
   t.innerHTML = `
@@ -2150,8 +2348,7 @@ function gfOpenItch(){
 
 /* ----- 14. EVENT WIRING ----- */
 document.getElementById('btn-new-run').onclick = ()=>{
-  startNewRun();
-  showScreen('game-screen');
+  chooseSigil();
 };
 document.getElementById('btn-continue').onclick = ()=>{
   if(state.run){
@@ -2211,7 +2408,7 @@ const _origShow = showScreen;
 window.showScreen = (id)=>{ _origShow(id); setTimeout(hydrateArt, 0); };
 
 /* expose for debugging */
-window.GLYPH_FORGE = { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell };
+window.GLYPH_FORGE = { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, RELICS, SIGILS, CHAMPIONS };
 
 /* ===== DEV SANDBOX — gated; inert for normal players ======================
    Toggle: backtick key (`) or click the tiny "⚙ dev" badge (bottom-left).

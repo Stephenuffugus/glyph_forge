@@ -196,8 +196,8 @@ seeds so daily-sigil determinism and the sim win-rate baseline don't drift.
 |---|---|---|---|
 | **1. Tags + Combo Graph** ✅ SHIPPED | `tags[]` on all 32 runes; 22 tag-based `NAMED_COMBOS` appended (14→36). Math byte-identical. | None | Codex tripled; pure discovery depth |
 | **2. The Two-Track Engine** ✅ SHIPPED | `ctx.xmult` + ordered resolution; exponential element/shape → XMULT; Crescendo/Culminate order-dependent XMULT runes. BALANCE.md re-baselined (37%→41%). | High (core) | The depth ceiling; slot order = skill |
-| **3. Relics** | `ctx.relicHooks`, `run.relics`, `RELICS` data, relic-offer modal (offset seed). Inert when empty → baseline unchanged. | Med | Relics drop & reshape spells |
-| **4. Build Identity** | Run-start **Sigil** (bless+forbid) + curated pool weighting; **Champion Rune** 3-path locked tree; element-pair codex unlocks. | Med | Players sculpt a build |
+| **3. Relics** ✅ SHIPPED | `RELICS` + `applyDepth` pre/post hooks, `run.relics`, relic-offer modal at enc 3/6/10 (offset seed). Inert when empty. | Med | Relics drop & reshape spells |
+| **4. Build Identity** ✅ SHIPPED | Run-start **Sigil** picker (bless+forbid+HP), curated draw pool, Champion leveling at enc 4/8. | Med | Players sculpt a build |
 | **5. The Rune Web** | Per-run `run.progression` tree, "??? until bound" reveal, Prophecy steering, hidden transmutation families, silent breakpoints. | Med | The Neon-Abyss spine |
 | **6. Meta + Counter-Boss + Determinism** | Meta unlock thresholds, codex surfacing, the counter-boss, fix the `Date.now()` non-determinism behind a sim-validated change. | Med | Long-tail mastery + robustness |
 
