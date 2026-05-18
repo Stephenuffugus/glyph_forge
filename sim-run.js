@@ -1,4 +1,7 @@
 // Full run simulator. Greedy AI that picks the best damage combo each turn.
+// Phase 7: in addition to the per-Sigil battery, this also runs a relic-impact
+// matrix, champion level-scaling sanity, build-archetype detection, and a
+// determinism assertion, then prints a single BALANCE VERDICT.
 const fs = require('fs');
 const html = fs.readFileSync(require('path').join(__dirname, 'index.html'), 'utf8');
 const code = html.match(/<script>([\s\S]+?)<\/script>/)[1];
@@ -15,8 +18,9 @@ const stubs = `
 
 const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, onSpellBound, ensureRunDepth, RELICS, SIGILS, CHAMPIONS, TRANSMUTATIONS };})()`);
 
-// Replicate run logic locally so we don't need DOM-touching functions
-function newSim(seedStr, sigilId){
+// Replicate run logic locally so we don't need DOM-touching functions.
+// grantRelics: optional array of relic ids force-bound at run start (relic matrix).
+function newSim(seedStr, sigilId, grantRelics){
   const sg = (game.SIGILS||[]).find(s=>s.id===sigilId) || (game.SIGILS||[{id:'free',maxHp:50}])[0];
   const seed = (function(){
     let h = 1779033703 ^ seedStr.length;
@@ -46,11 +50,11 @@ function newSim(seedStr, sigilId){
     path, enemyHp: 0, enemyMaxHp: 0,
     fluency: 0,
     // depth (mirror startNewRun)
-    sigil: sg.id, relics: [],
+    sigil: sg.id, relics: (grantRelics||[]).slice(),
     champion: sg.champion ? { id: sg.champion, level:1, path:0 } : null,
     progression: { bound:[], revealed:[], prophecy:null, transmuted:[] },
     boundElements: [], castCount: 0,
-    log: []
+    log: [], dmgLog: [], champPeakLevel: (sg.champion ? 1 : 0)
   };
 }
 
@@ -197,8 +201,8 @@ function rewardChoice(run){
   return picked;
 }
 
-function runOne(seedStr, sigilId){
-  const run = newSim(seedStr, sigilId);
+function runOne(seedStr, sigilId, grantRelics){
+  const run = newSim(seedStr, sigilId, grantRelics);
   beginEnc(run);
   let turnLimit = 200;
   while(turnLimit-- > 0){
@@ -208,7 +212,6 @@ function runOne(seedStr, sigilId){
     // pick best spell
     const best = tryAllSpells(run);
     if(best.indices.length === 0){
-      // no spell possible — should be impossible since hand=5
       run.log.push(`  ! no playable spell?`);
       break;
     }
@@ -216,13 +219,15 @@ function runOne(seedStr, sigilId){
     const spellRunes = best.indices.map(i=>run.hand[i]).filter(Boolean);
     const result = applyCast(run);
     run.log.push(`  T${run.encounterIdx+1} cast [${spellRunes.join('+')}] dmg=${result.damage} enemy=${run.enemyHp}/${run.enemyMaxHp}`);
+    run.dmgLog.push({ enc: run.encounterIdx, runes: spellRunes.slice(), dmg: result.damage });
 
     if(run.enemyHp <= 0){
       run.log.push(`  >> defeated ${game.ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId).name}`);
       run.fluency += 1;
       // mirror showRewardModal branching: champion -> relic -> rune
-      if(run.champion && (run.encounterIdx===3 || run.encounterIdx===7)){
+      if(run.champion && (run.encounterIdx===3 || run.encounterIdx===7 || run.encounterIdx===11)){
         run.champion.level = (run.champion.level||1) + 1;
+        run.champPeakLevel = Math.max(run.champPeakLevel||0, run.champion.level);
         run.log.push(`  champion -> lvl ${run.champion.level}`);
       } else if([2,5,9].includes(run.encounterIdx)){
         const owned = new Set(run.relics);
@@ -248,17 +253,52 @@ function runOne(seedStr, sigilId){
   return run;
 }
 
-// Per-Sigil balance battery (Phase 3-6 validation). Each Sigil plays the
-// full 100-run AI battery; we flag any build that's trivially easy or
-// impossibly hard so the depth power can be tuned with evidence.
+/* ====================================================================
+   ANALYSIS HELPERS
+   ==================================================================== */
 const NUM_RUNS = 100;
+const RELIC_RUNS = 35;          // lower per-cell count for the relic matrix
 const SIGIL_IDS = (game.SIGILS||[{id:'free'}]).map(s=>s.id);
+const RUNE_BY_ID = {};
+game.RUNES.forEach(r=>{ RUNE_BY_ID[r.id] = r; });
+
+function classifyRun(run){
+  const tally = { 'mono-element':0, 'shape-stack':0, 'xmult-payoff':0, retrigger:0, pandemonium:0, other:0 };
+  (run.dmgLog||[]).forEach(rec=>{
+    const objs = rec.runes.map(id=>RUNE_BY_ID[id]).filter(Boolean);
+    if(objs.length===0){ tally.other++; return; }
+    const tags = objs.reduce((a,o)=>a.concat(o.tags||[]),[]);
+    const els = new Set(objs.map(o=>o.element));
+    const shapes = new Set(objs.map(o=>o.shape));
+    const w = Math.max(1, rec.dmg);
+    if(rec.runes.includes('pandemonium')) tally.pandemonium += w;
+    else if(tags.includes('retrigger') || rec.runes.includes('ouroboros') || rec.runes.includes('echo') || rec.runes.includes('recursion') || rec.runes.includes('twin')) tally.retrigger += w;
+    else if(tags.includes('xmult')) tally['xmult-payoff'] += w;
+    else if(objs.length>=3 && els.size===1) tally['mono-element'] += w;
+    else if(objs.length>=3 && shapes.size===1) tally['shape-stack'] += w;
+    else tally.other += w;
+  });
+  let best='other', bestV=-1;
+  Object.entries(tally).forEach(([k,v])=>{ if(k!=='other' && v>bestV){ bestV=v; best=k; } });
+  if(bestV<=0) best='other';
+  return best;
+}
+
+function runFingerprint(run){
+  return run.encounterIdx + '|' + (run.dmgLog||[]).map(r=>r.enc+':'+r.runes.join('+')+'='+r.dmg).join(',');
+}
+
+/* ====================================================================
+   1. PER-SIGIL BALANCE BATTERY
+   ==================================================================== */
 console.log(`Running ${NUM_RUNS} AI playthroughs per Sigil (${SIGIL_IDS.join(', ')})...\n`);
 
 function battery(sigilId){
   let wins=0; const lossEnc={}; let peak=[]; let dmgs=[];
+  const runs=[];
   for(let i=0;i<NUM_RUNS;i++){
     const run = runOne('sim-'+i, sigilId);
+    runs.push(run);
     if(run.encounterIdx >= 13) wins++;
     else lossEnc[run.encounterIdx] = (lossEnc[run.encounterIdx]||0)+1;
     const ds = run.log.filter(l=>l.includes('dmg=')).map(l=>{ const m=l.match(/dmg=(\d+)/); return m?+m[1]:0; });
@@ -270,7 +310,7 @@ function battery(sigilId){
     bossLoss: lossEnc[12]||0,
     avgDmg: dmgs.length ? dmgs.reduce((a,b)=>a+b,0)/dmgs.length : 0,
     peakMax: Math.max(...peak),
-    lossEnc,
+    lossEnc, runs,
   };
 }
 
@@ -286,7 +326,130 @@ const easy = results.filter(r=>r.pct>70), hard = results.filter(r=>r.pct<15);
 if(easy.length) console.log(`⚠ Trivial Sigils: ${easy.map(r=>r.sigilId).join(', ')} — nerf their boon/curated pool`);
 if(hard.length) console.log(`⚠ Brutal Sigils:  ${hard.map(r=>r.sigilId).join(', ')} — the seal is too costly`);
 if(!easy.length && !hard.length) console.log(`✓ All Sigils inside the healthy band — depth power is balanced.`);
-
-// Win rate for the default 'free' Sigil = the Phase-2 regression baseline.
 const free = results.find(r=>r.sigilId==='free');
 if(free) console.log(`\nBaseline (Free Inscription): ${free.pct.toFixed(1)}%  (Phase-2 reference ~37-41%)`);
+
+/* ====================================================================
+   2. PER-RELIC IMPACT MATRIX
+   ==================================================================== */
+console.log(`\n=== PER-RELIC IMPACT (force-granted at run start, ${RELIC_RUNS} runs/Sigil/relic) ===`);
+function relicWinRate(grant){
+  let wins=0, total=0;
+  SIGIL_IDS.forEach(sid=>{
+    for(let i=0;i<RELIC_RUNS;i++){
+      total++;
+      const run = runOne('rlc-'+i, sid, grant);
+      if(run.encounterIdx >= 13) wins++;
+    }
+  });
+  return { pct: wins/total*100, wins, total };
+}
+const baseline = relicWinRate([]);
+console.log(`  (control: no relic)            ${baseline.pct.toFixed(1)}%  (${baseline.wins}/${baseline.total})`);
+const offerableRelics = (game.RELICS||[]).filter(r=>!r.hidden);
+const relicRows = offerableRelics.map(rel=>{
+  const r = relicWinRate([rel.id]);
+  return { id:rel.id, name:rel.name, rarity:rel.rarity, pct:r.pct, delta:r.pct - baseline.pct };
+});
+relicRows.sort((a,b)=>b.delta-a.delta);
+const overpowered=[], dead=[];
+relicRows.forEach(row=>{
+  const sign = row.delta>=0 ? '+' : '';
+  let flag='';
+  if(row.delta > 25){ flag='  ⚠ OVERPOWERED'; overpowered.push(row); }
+  else if(row.delta < 2){ flag='  ⚠ DEAD'; dead.push(row); }
+  console.log(`  ${row.name.padEnd(24)} ${row.pct.toFixed(1).padStart(5)}%  Δ ${sign}${row.delta.toFixed(1)}pts  (${row.rarity})${flag}`);
+});
+
+/* ====================================================================
+   3. CHAMPION LEVEL SCALING SANITY
+   ==================================================================== */
+console.log(`\n=== CHAMPION LEVEL SCALING (avg win-rate by final Champion level) ===`);
+const byLevel = {};
+results.forEach(res=>{
+  res.runs.forEach(run=>{
+    if(!run.champion) return;
+    const lv = run.champPeakLevel || run.champion.level || 1;
+    byLevel[lv] = byLevel[lv] || { wins:0, total:0 };
+    byLevel[lv].total++;
+    if(run.encounterIdx >= 13) byLevel[lv].wins++;
+  });
+});
+const lvKeys = Object.keys(byLevel).map(Number).sort((a,b)=>a-b);
+if(lvKeys.length===0){
+  console.log('  (no Champion-bearing runs in the battery)');
+} else {
+  lvKeys.forEach(lv=>{
+    const c = byLevel[lv];
+    console.log(`  Level ${lv}: ${(c.total?c.wins/c.total*100:0).toFixed(1)}% win  (${c.wins}/${c.total} runs)`);
+  });
+  let monotone=true;
+  for(let i=1;i<lvKeys.length;i++){
+    const lo = byLevel[lvKeys[i-1]], hi = byLevel[lvKeys[i]];
+    if((hi.total?hi.wins/hi.total*100:0) + 5 < (lo.total?lo.wins/lo.total*100:0)) monotone=false;
+  }
+  console.log(monotone ? '  ✓ Champion scaling is monotone-ish.' : '  ⚠ Champion scaling inverts — check apply() curves.');
+}
+
+/* ====================================================================
+   4. BUILD-ARCHETYPE DETECTION
+   ==================================================================== */
+console.log(`\n=== BUILD ARCHETYPE WIN-RATE (dominant line per run, all Sigils) ===`);
+const arch = {};
+results.forEach(res=>{
+  res.runs.forEach(run=>{
+    const a = classifyRun(run);
+    arch[a] = arch[a] || { wins:0, total:0 };
+    arch[a].total++;
+    if(run.encounterIdx >= 13) arch[a].wins++;
+  });
+});
+const archRows = Object.entries(arch).map(([name,c])=>({
+  name, total:c.total, wins:c.wins,
+  pct: c.total ? c.wins/c.total*100 : 0,
+  share: c.total / (results.length*NUM_RUNS) * 100
+})).sort((a,b)=>b.share-a.share);
+archRows.forEach(row=>{
+  console.log(`  ${row.name.padEnd(13)} share ${row.share.toFixed(1).padStart(5)}%  win ${row.pct.toFixed(1).padStart(5)}%  (${row.wins}/${row.total})`);
+});
+const playable = archRows.filter(r=>r.name!=='other');
+const domArch = playable.slice().sort((a,b)=>b.share-a.share)[0];
+const archDominant = domArch && domArch.share > 60 ? domArch : null;
+if(archDominant) console.log(`  ⚠ '${archDominant.name}' is played in ${archDominant.share.toFixed(0)}% of runs — strategy diversity is thin.`);
+else console.log('  ✓ No single archetype exceeds 60% of runs — strategy space is varied.');
+
+/* ====================================================================
+   5. DETERMINISM ASSERTION
+   ==================================================================== */
+console.log(`\n=== DETERMINISM ASSERTION (same seed + Sigil twice) ===`);
+let detPass = true;
+SIGIL_IDS.forEach(sid=>{
+  const a = runOne('determinism-probe', sid);
+  const b = runOne('determinism-probe', sid);
+  const ok = runFingerprint(a) === runFingerprint(b) && a.encounterIdx === b.encounterIdx;
+  if(!ok) detPass = false;
+  console.log(`  ${sid.padEnd(7)} encIdx ${a.encounterIdx}/${b.encounterIdx}  casts ${a.dmgLog.length}/${b.dmgLog.length}  ${ok ? 'PASS' : 'FAIL'}`);
+});
+console.log(detPass
+  ? '  ✓ DETERMINISM PASS — identical reruns.'
+  : '  ✗ DETERMINISM FAIL — reruns diverge; Phase-6 fix regressed.');
+
+/* ====================================================================
+   BALANCE VERDICT
+   ==================================================================== */
+console.log(`\n================  BALANCE VERDICT  ================`);
+const verdicts = [];
+if(easy.length) verdicts.push(`Overpowered Sigil(s): ${easy.map(r=>r.sigilId+' '+r.pct.toFixed(0)+'%').join(', ')}.`);
+if(hard.length) verdicts.push(`Brutal Sigil(s): ${hard.map(r=>r.sigilId+' '+r.pct.toFixed(0)+'%').join(', ')}.`);
+if(!easy.length && !hard.length) verdicts.push(`Sigils balanced (all 15-70%, overall ${overall.toFixed(0)}%).`);
+if(overpowered.length) verdicts.push(`Overpowered relic(s): ${overpowered.map(r=>r.name+' (+'+r.delta.toFixed(0)+'pts)').join(', ')}.`);
+if(dead.length) verdicts.push(`Dead relic(s) (<+2pts): ${dead.map(r=>r.name).join(', ')}.`);
+if(!overpowered.length && !dead.length) verdicts.push(`Relics balanced (+2..+25 pts each).`);
+if(relicRows[0]) verdicts.push(`Strongest relic: ${relicRows[0].name} (Δ+${relicRows[0].delta.toFixed(1)}). Weakest: ${relicRows[relicRows.length-1].name} (Δ${(relicRows[relicRows.length-1].delta>=0?'+':'')}${relicRows[relicRows.length-1].delta.toFixed(1)}).`);
+if(archDominant) verdicts.push(`Dominant strategy: '${archDominant.name}' (${archDominant.share.toFixed(0)}% of runs).`);
+else if(playable.length) verdicts.push(`Strategy diversity OK; most common '${(domArch||playable[0]).name}' ${((domArch||playable[0]).share).toFixed(0)}%.`);
+verdicts.push(`Determinism: ${detPass ? 'PASS' : 'FAIL'}.`);
+verdicts.forEach(v=>console.log(`• ${v}`));
+const anyAlarm = easy.length || hard.length || overpowered.length || dead.length || archDominant || !detPass;
+console.log(anyAlarm ? `\nVERDICT: tuning needed — see flagged items.` : `\nVERDICT: depth systems balanced; determinism holds.`);
+console.log(`===================================================`);

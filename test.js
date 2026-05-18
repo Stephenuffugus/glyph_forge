@@ -1,3 +1,5 @@
+
+
 // Test harness: extract game logic from index.html and stress it
 const fs = require('fs');
 const html = fs.readFileSync(require('path').join(__dirname, 'index.html'), 'utf8');
