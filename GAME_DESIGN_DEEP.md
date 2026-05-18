@@ -1,0 +1,216 @@
+# Glyph Forge — Deep Systems Design Bible
+
+Synthesis of a 6-lane research deep-dive (roguelite combo engines, RPG build-identity,
+Neon-Abyss progressive reveal, MTG/TCG combo theory, international/award-winning
+standouts, and a codebase architecture pass). This is the plan to take Glyph Forge
+from "a damage calculator" to "a build-craft RPG that floors players with its depth."
+
+The whole genre's award winners (Balatro, Inscryption, Slay the Spire, Library of
+Ruina, Cobalt Core, Shogun Showdown) derive depth from the **same four moves**.
+We will make all four.
+
+---
+
+## The Core Problem (what every agent independently flagged)
+
+Glyph Forge has *combinatorial surface* (9 elements × 7 shapes × fusion) but:
+
+1. **One depth axis.** Synergy just multiplies one damage number, flatly. No
+   additive-vs-multiplicative tension, so there is no "engine you build then
+   detonate" — the genre's central pleasure.
+2. **No commitment.** Every run draws the same undifferentiated pool. Fluency
+   rewards *killing*, not *focusing*. There is no build identity to sculpt.
+3. **No reveal.** Encounter 13 plays identically to encounter 1. Nothing "opens
+   up" mid-run. The owner's Neon-Abyss reference is the missing spine.
+4. **Depth players can't see is wasted.** No signposting, so even existing
+   combos feel like luck, not authorship.
+
+---
+
+## PILLAR 1 — The Two-Track Engine (Balatro's lesson; highest leverage)
+
+**Replace flat "synergy × damage" with a sequential, order-dependent pipeline.**
+
+Every fused spell resolves its 3 slots **left → right (I → II → III)** through
+three explicit tracks the codex teaches:
+
+```
+POWER  (additive)   base = Σ (rune.basePower + add)        ← Earth/Order, big-base runes
+MULT   (additive)   mult = 1 + Σ synergy & effect bonuses  ← same-element/shape, most effects
+XMULT  (multiplicative) xmult ×= …                          ← scarce Void/Chaos payoff runes
+damage = floor( POWER × MULT × XMULT × fluency )
+```
+
+- **Slot order matters.** A rune that does "XMULT ×1.5 if MULT ≥ 8" is worthless
+  in slot I and game-breaking in slot III. Arrangement becomes the core skill
+  expression (Balatro joker order; Vampire Crawlers' ascending chain).
+- **Same-element / same-shape grant XMULT, not flat bonuses** — so focus scales
+  *exponentially*, which is what creates build identity and the absurd ceiling.
+- **XMULT runes are a scarce rarity** and scale off the spell's *built-up state*
+  (`xmult ×= 1 + base/50`) so they are useless alone, nuclear on a built engine
+  (Monster Train Multistrike). The big combo *feels earned*.
+
+**Apex mechanic — recursive bounded retrigger.** A retrigger rune re-runs the
+*entire* fused effect chain (its value = everything else combined, recursively).
+Bound it so it's exponential-but-convergent: each recursion's contribution
+×0.8, depth ≤ 3. This is the cleanest "1000s of damage from 3 runes" lever and
+the euphoric peak — gated, not default.
+
+This single pillar converts a flat number into a combinatorial space. Everything
+else compounds off it.
+
+---
+
+## PILLAR 2 — The Element Pie (MTG color pie; build identity through constraint)
+
+Each of the 9 elements gets a **mechanical lane it owns** and an **anti-lane it
+is forbidden from** — expressed as a one-line "victory through X" thesis. This is
+what makes "a Fire build" actually *mean* something. Restriction forges identity
+faster and cheaper than bonuses.
+
+| Element | Thesis | Owns | Forbidden |
+|---|---|---|---|
+| **Fire** | victory through tempo | high base, `repeats`, burn DoT | cannot write heal/defense |
+| **Water** | victory through scaling | `mult`/`add` that grow over the run | weak burst |
+| **Earth** | victory through persistence | huge flat base, carryover | lowest XMULT access |
+| **Air** | victory through reach | chains, multi-hit, extra draw | poor single-target |
+| **Void** | victory through sacrifice | top-tier XMULT, pay HP/runes | no safe lines |
+| **Light** | victory through consistency | tutoring/filtering (find combos) | low ceiling |
+| **Shadow** | victory through disruption | enemy debuff, lifesteal | low raw output |
+| **Order** | victory through symmetry | pays off uniform spells | collapses if mixed |
+| **Chaos** | victory through variance | coin-flip XMULT swings, retrigger | bad expected value |
+
+These are *enforced in `effect()` design*, not flavor text (a Fire rune literally
+has no branch that writes `heal`). The 7 **shapes** become the second build axis:
+shape determines **slot-adjacency reach** (Backpack Hero / Luck be a Landlord) —
+e.g. a "Chain" shape projects its bonus to both neighbor slots; a "Bolt" only to
+the next. Mono-shape becomes a real strategy, not a coincidence.
+
+---
+
+## PILLAR 3 — Ability-Words & the Combo Grammar (MTG; the massive combo graph)
+
+Tag every rune with **roles** (`enabler` → `engine` → `payoff` → `scaler`) and a
+small dictionary of **ability-words** (named keywords printed on runes that bundle
+a trigger with payoffs scattered across the 9×7 grid):
+
+- **Attunement** — "for each same-element rune in this spell, +X" (devotion).
+- **Cascade** — "if this is the 2nd+ rune in the combo, ×1.5 mult" (prowess).
+- **Geometry** — "trigger whenever a shape repeats" (the shape build-around).
+- **Sediment** — "if 4+ runes in discard, this gains effect" (self-mill archetype).
+- **Overflow** — "first time MULT exceeds 10, retrigger" (the ramp payoff).
+
+A combo is now legible and *assemblable*: hold an `enabler`, hunt a `payoff`.
+N enablers × M engines × P payoffs = a huge discoverable space from few runes.
+The codex grows from 14 hand-authored combos to a structural graph (~40+) where
+`match()` reads tags, not brittle id lists. **Lenticular runes**: every common
+has a plain effect *and* a hidden tag — beginners see filler, experts see an
+enabler. That gap is the "oh god it's deep" moment.
+
+---
+
+## PILLAR 4 — Build Identity: Sigil + Curated Pool + Champion Rune
+
+The owner's "sculpt your character, focus on certain spells/abilities":
+
+- **Run-start Sigil (StS relic × Library of Ruina constraint).** Choose one. It
+  **blesses AND forbids**: *Emberheart — Fire runes +3 base & gain Cascade;
+  Water/Light runes cannot be fused.* Subtraction creates focus instantly for
+  near-zero content. This is the single highest-leverage identity lever.
+- **Curated draw pool.** Once a Sigil is equipped, the rune-offer pool is
+  **weighted toward its element/shape** so the snowball can actually form. (StS
+  pools are curated, not uniform — without this, identity is cosmetic.)
+- **Champion Rune (Monster Train).** One signature legendary per element, unique
+  to that build, that **levels up at encounters 4 / 8 / 12** along a 3-path tree
+  where only 2 options show each time and earlier picks are re-offered →
+  **irreversible specialization**. The run's narrative spine.
+- **Element-pair archetypes feed the codex (Hades Duo Boons).** Mastering
+  Fire+Chaos permanently unlocks a passive. The codex stops being a passive log
+  and becomes the meta-progression engine that *names and rewards* identity.
+
+---
+
+## PILLAR 5 — The Rune Web: Progressive In-Run Reveal (the owner's Neon Abyss ask)
+
+A per-run **Rune Web** (resets each run). Nodes are runes/effects/combos.
+
+- A node renders **face-down "???"** until its prerequisite is **bound** (fused
+  into a cast spell at least once *this run*). Binding a Fire rune reveals the
+  Fire branch: higher Fire runes + named Fire combos that were invisible at run
+  start. *You cannot see the door until you open the one before it.*
+- **Forward-looking codex + Prophecy steering (Hades Codex).** A combo shows as
+  a **silhouette** ("Element + Shape → ??? deals 3× and chains") the moment you
+  hold *one* component. Pick one **Prophecy** at run start; offers that advance
+  it get a visible icon — steerable RNG so reveals feel *earned, not random*
+  (the Peglin failure mode we explicitly avoid).
+- **Hidden transmutation families (Isaac Guppy).** Secret 3-rune triads that,
+  when all bound in one run, fire a run-rewiring transmutation. Covert layer for
+  veterans to keep discovering after the visible web is mastered.
+- **Silent breakpoints (Risk of Rain 2).** 3rd same-element rune flips additive→
+  multiplicative; the tooltip only reveals the true curve after you first cross
+  it. Nearly free numeric depth on top of the structural reveal.
+
+---
+
+## PILLAR 6 — Relics, Risk, and the Counter-Boss (gating the depth)
+
+- **Relics/Artifacts** — passive modifiers injected as hooks into the resolve
+  pipeline (`ctx.relicHooks`). The backbone that archetypes and the Web grant.
+- **Corruption track (Astrea, optional).** High-power runes deal recoil/curse to
+  the caster but unlock a slot's "overcharged" mode — a glass-cannon identity and
+  natural counter-pressure to the fluency ramp.
+- **Gating infinites (StS Time Eater).** Loops are *allowed* but walled by:
+  (a) cost — loop enablers need pool-thinning or scarce Mythic runes;
+  (b) soft cap — retrigger decay ×0.8, depth ≤ 3 (exponential, convergent);
+  (c) a **counter-boss** — "spells resolving >N times deal 0" / "removes one
+  synergy axis." Forces a second viable build → more identity, not less.
+- **In-run rune curation (Vault of the Void).** Between encounters: *Banish* a
+  rune (thin the pool toward a deterministic combo) or *Attune* (lock an
+  element). This is the missing meta-progression AND the infinite cost-gate, in
+  one mechanic.
+
+---
+
+## What this becomes
+
+A run is now: pick a **Sigil** (identity thesis) → draft into a **curated pool** →
+fuse runes through an **ordered add/mult/xmult engine** where slot order is skill
+→ **bind** runes to crack open the **Rune Web** and reveal deeper runes/combos →
+chase a **Prophecy** and your **Champion Rune** upgrades → assemble an
+**enabler→engine→payoff** line that detonates for absurd, *earned* numbers →
+beat a **counter-boss** that punishes the dominant build → the **codex** records
+your mastery and permanently unlocks more identities. Twelve-minute runs, but the
+system keeps unfolding for 100 of them.
+
+---
+
+## Phased Rollout (each phase independently shippable & test-green)
+
+From the codebase architecture pass. Discipline every phase: `node test.js` +
+`node sim-run.js` stay green, BALANCE.md is the regression baseline, save key
+(`glyph-forge-v1`) never changes (additive schema only), stay in ONE `<script>`
+tag (the test harness regex depends on it), and relic/tree RNG uses *offset*
+seeds so daily-sigil determinism and the sim win-rate baseline don't drift.
+
+| Phase | Scope | Risk | Ships |
+|---|---|---|---|
+| **1. Tags + Combo Graph** | Add `tags[]` to 30 runes (pure data); append ~25 tag-based `NAMED_COMBOS` (enabler→engine→payoff); ability-words. No engine change → damage math byte-identical. | None | A pure discovery-depth boost; codex triples |
+| **2. The Two-Track Engine** | `ctx` gains `xmult`/ordered resolution; same-element/shape → XMULT; scarce state-scaling XMULT runes; bounded recursive retrigger. Re-baseline BALANCE.md. | High (core) | The depth ceiling; "build then detonate" |
+| **3. Relics** | `ctx.relicHooks`, `run.relics`, `RELICS` data, relic-offer modal (offset seed). Inert when empty → baseline unchanged. | Med | Relics drop & reshape spells |
+| **4. Build Identity** | Run-start **Sigil** (bless+forbid) + curated pool weighting; **Champion Rune** 3-path locked tree; element-pair codex unlocks. | Med | Players sculpt a build |
+| **5. The Rune Web** | Per-run `run.progression` tree, "??? until bound" reveal, Prophecy steering, hidden transmutation families, silent breakpoints. | Med | The Neon-Abyss spine |
+| **6. Meta + Counter-Boss + Determinism** | Meta unlock thresholds, codex surfacing, the counter-boss, fix the `Date.now()` non-determinism behind a sim-validated change. | Med | Long-tail mastery + robustness |
+
+Phase 1 is free depth and ships immediately. Phase 2 is the keystone — it changes
+"what the game is" and re-baselines balance, so it gets its own validation pass.
+3–6 each layer on without breaking the prior.
+
+---
+
+## Sources
+
+Full source lists are in the research briefs (Balatro scoring, StS Echo Form,
+Monster Train Multistrike/Champion, Library of Ruina Key Pages, Hades Duo/Codex,
+Neon Abyss skill pages, MTG color pie/ability-words/lenticular design, Cobalt
+Core, Shogun Showdown, Inscryption, Astrea, Backpack Hero, IGF/TGA/BAFTA/GDCA
+2022–2025 winners). Retained in the session research record.
