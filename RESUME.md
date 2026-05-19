@@ -1,5 +1,46 @@
 # RESUME — pick up here the moment you say "lets get started"
 
+> Paused mid playtest-iterate loop (user took a break). Everything
+> committed/pushed/saved, b16 live. Walk the two checklists below.
+
+## ☐ A · PLAYTEST CHECKLIST — do this on the Pixel 9 during the break
+Play `https://stephenuffugus.github.io/glyph_forge/` (chip should read
+`b16 codex-dock+bigger`; pull-to-refresh if not). Note anything per item:
+
+- [ ] **Install it** (Chrome ⋮ → Install app → open from home icon).
+      Does it run truly immersive — no bars at all, ever? (the durable fix)
+- [ ] **Size** — hand cards / text / buttons: too small still, good, or
+      too big now? (it's a single dial I can turn either way)
+- [ ] **Codex dock** — `✦ Codex` (bottom-left) opens a panel over the top
+      while hand stays visible/tappable. Right height (60%)? Useful?
+      Does "Ready from your hand" update live as you stage/draw?
+- [ ] **Recall** — the old Recall button is gone (tap a staged rune's slot
+      to return it). Fine, or want one-tap "recall all" back?
+- [ ] **b11 apprentice (the retention fix — most important)** on a *fresh*
+      run / Ascension 0: do rewards rail toward one element, and does the
+      gold coach line *teach* the 3-mono play without nagging? Is it
+      followable? Does it fade after you win / climb Ascension?
+- [ ] **Field Guide value** — does it actually help you find/repeat strong
+      combos, or just clutter?
+- [ ] Anything else that feels bad on the phone (feel, pacing, clarity).
+
+## ☐ B · WORK QUEUE — when we resume, in order
+1. **Triage playtest notes** → each becomes one tested fix (gate every
+   commit on `node test.js` green with `&&`, then `node sim-run.js`).
+2. **Tune from A**: `--ui` dial / hand columns (size); `#guide-panel`
+   height %; restore one-tap Recall if wanted. (All quick number-turns.)
+3. **Validate or iterate b11 apprentice** — the sim says deck-rail+teach
+   together = ~+6pts D7 (fully rescues Lapsed, partial Casual). Confirm it
+   *feels* right on device; if the coach annoys or doesn't land, iterate
+   the surface (see [retention-cliff-finding] in memory + tools/retention-sim.js).
+4. **Then back to the cash roadmap** (the actual goal): P1 boss phase-2 +
+   deck-thinning, P3 tighten weak Sigils (re-sim each via
+   `node tools/retention-sim.js`), P4 paid gate once retention proven.
+5. Non-blocking: real icon art → overwrite `art-slots/icon-{192,512}.png`
+   (placeholder from `node tools/make-icons.mjs`); ART_SHOTLIST.md.
+
+---
+
 **Status: BUILD COMPLETE & SAFE + in playtest-iterate loop.** `node test.js`
 green, `node sim-run.js` verdict *"depth systems balanced; determinism holds"*,
 all committed & pushed to `main`. Build stamp on the title strip:
