@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0d0a08" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -706,10 +706,11 @@
     display: flex; gap: 8px;
     flex-shrink: 0;
     padding: 8px 16px 12px;
-    /* viewport-fit=cover removed, so the browser already keeps content
-       above the Android nav bar / iOS home indicator. This is just
-       breathing room above the bottom edge. */
-    padding-bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+    /* viewport-fit=cover is REQUIRED for env(safe-area-inset-*) to be
+       non-zero. With it set, this lifts the cast buttons clear of the
+       Android gesture/back bar + iOS home indicator. The 28px floor is
+       a hard guarantee for browsers that report the inset as 0. */
+    padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px));
     background: var(--ink-deep);
     border-top: 1px solid rgba(212,168,73,0.15);
   }
@@ -3100,7 +3101,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b11 apprentice';
+const GF_BUILD = '2026-05-19 · b12 bottombar-fix';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
