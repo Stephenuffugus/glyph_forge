@@ -919,6 +919,23 @@
     letter-spacing: 0.3em;
     margin-top: 6px;
   }
+
+  /* ----- Juice: tap targets (44px min) + reduced-motion ----- */
+  button.btn.small { min-height: 44px; }
+  button.btn.icon  { min-height: 44px; min-width: 44px; }
+  .spell-slot, .rune { -webkit-tap-highlight-color: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+    .enemy-portrait.hit { animation: none; }
+    .damage-pop { animation: none; opacity: 1; }
+    #gf-screen-flash { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -1131,6 +1148,22 @@ const GFAudio = (function(){
   }
   return api;
 })();
+
+/* ----- 0b. JUICE HELPERS — motion/haptic, Node-safe -----
+   gfReducedMotion(): honour the OS "reduce motion" setting (and go quiet in
+   Node, where matchMedia is absent). gfHaptic(): a guarded vibrate — silent
+   on desktop / unsupported / reduced-motion. Both are pure no-ops in the
+   test/sim stubs (no window.matchMedia, no navigator.vibrate). */
+function gfReducedMotion(){
+  try { return typeof window !== 'undefined' && window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch(e){ return false; }
+}
+function gfHaptic(ms){
+  try { if(gfReducedMotion()) return;
+    if(typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms||10); }
+  catch(e){}
+}
 
 /* ----- 1. RUNE DEFINITIONS -----
    Properties:
