@@ -2792,6 +2792,7 @@ function renderTitleMeta(){
   if(d.streak > 0) parts.push(`<span class="tm-chip" data-tip="Consecutive days you've played the Daily Sigil. Best: ${d.bestStreak||d.streak}.">🔥 Daily streak <b>${d.streak}</b></span>`);
   parts.push(`<span class="tm-chip" data-tip="Your codex: named fusions and bound glyphs discovered.">✦ Codex <b>${combos}/${NAMED_COMBOS.length}</b> · <b>${runes}/${RUNES.length}</b></span>`);
   if(m.runsCompleted > 0) parts.push(`<span class="tm-chip" data-tip="Full 13/13 codices you've sealed.">✷ Wins <b>${m.runsCompleted}</b></span>`);
+  parts.push(`<span class="tm-chip" style="opacity:.5" data-tip="App build currently loaded. If this doesn't change after a fix, force-refresh.">build ${GF_BUILD}</span>`);
   el.innerHTML = parts.join('');
 }
 
@@ -3043,6 +3044,11 @@ function showComboBanner(name, isNew, big){
   setTimeout(()=>b.remove(), 1700);
 }
 
+/* Build stamp — bump on every deploy so the title screen proves which
+   version you're actually running (kills "did the patch land?" during
+   playtest). */
+const GF_BUILD = '2026-05-19 · b10 meta+mobilefix';
+
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
    the storefront CTAs stay hidden so nothing looks broken at launch. The
@@ -3202,10 +3208,19 @@ document.getElementById('modal-bg').onclick = (e)=>{
   if(e.target.id === 'modal-bg'){ /* keep modal locked unless explicit */ }
 };
 
-/* PWA install: register service worker if file present */
+/* PWA install: register service worker + auto-apply new builds. When a new
+   SW takes control (new deploy), reload once so the player always lands on
+   the latest — no manual cache clearing during playtest/iteration. */
 if('serviceWorker' in navigator){
+  let _gfReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(_gfReloaded) return; _gfReloaded = true; location.reload();
+  });
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      reg.update();
+      setInterval(()=>reg.update(), 60000);  // catch deploys mid-session
+    }).catch(()=>{});
   });
 }
 

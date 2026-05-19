@@ -3,7 +3,10 @@
    visit (too large); they cache on use, so the first online session captures
    them, and subsequent offline sessions render with all hydrated art.
 */
-const CACHE = 'glyph-forge-v1';
+/* Bump this string on every deploy — `activate` purges any cache whose key
+   != CACHE, so a new value force-evicts the old shell and the fresh
+   index.html is fetched. (Unrelated to the localStorage save key.) */
+const CACHE = 'gf-shell-2026-05-19-b10';
 const SHELL = [
   './',
   './index.html',
