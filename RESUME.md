@@ -3,7 +3,7 @@
 **Status: BUILD COMPLETE & SAFE + in playtest-iterate loop.** `node test.js`
 green, `node sim-run.js` verdict *"depth systems balanced; determinism holds"*,
 all committed & pushed to `main`. Build stamp on the title strip:
-**`2026-05-19 · b15 fullscreen`** (bump `GF_BUILD` in index.html + the
+**`2026-05-19 · b16 codex-dock+bigger`** (bump `GF_BUILD` in index.html + the
 `CACHE` in sw.js every deploy; PWA auto-updates within ~60s; note GitHub
 Pages CDN edge can lag ~30-60s behind the build — re-curl, not a failure).
 
@@ -16,7 +16,13 @@ in-run **Field Guide** (✦ HUD btn → read-only overlay: discovered fusions
 **tap-to-fullscreen** (`gfGoFullscreen` on pointerdown, Android Chrome
 hides nav+URL bars) + `mobile-web-app-capable` meta; THE real fix is
 Add-to-Home-Screen (manifest `display:fullscreen` → true immersive).
-All UI/CSS/listener only, sims byte-identical (resolveSpell untouched).
+b16 = Recall→`✦ Codex` in cast-row (per-slot tap still recalls);
+Field Guide now a DOCKABLE panel (`#guide-panel`, 60% top, hand+cast
+stay live under it, refreshes from renderGame) not a modal; bigger UI
+(hand 5→4 cols, font/btn bumps, single `--ui` dial in :root for
+tuning). All UI/CSS/listener only, sims byte-identical (resolveSpell
+untouched). AWAITING playtest read: size dial, panel-height %, whether
+to restore a one-tap Recall.
 
 **LIVE & always-on:** GitHub Pages (repo public) →
 `https://stephenuffugus.github.io/glyph_forge/`, auto-deploys every push.
