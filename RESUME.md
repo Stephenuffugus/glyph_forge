@@ -63,10 +63,15 @@ Mastery track (11 seals, zero power). Saves auto-migrate (deep-merge).
   unlock.
 
 ## ▶ Launch/ops (anytime)
-1. **Test-play.** Live now (codespace awake, port public):
-   `https://cuddly-disco-r5pvxv4764xhw7r9-8000.app.github.dev`
-   ("restart the server" if 404). Permanent: GitHub Pages 20s toggle (best
-   for iteration — auto-deploys every push), or Hostinger zip.
+1. **Test-play — PERMANENT LINK IS LIVE.** GitHub Pages enabled 2026-05-19
+   (repo made PUBLIC, Settings→Pages→main→/root). Always-on, codespace-
+   independent, auto-deploys every push to `main` within ~1 min:
+   **`https://stephenuffugus.github.io/glyph_forge/`**
+   Verify a deploy: `gh api repos/Stephenuffugus/glyph_forge/pages/builds/latest`
+   + `curl -s -L .../glyph_forge/ | grep GF_BUILD`. Codespace dev URL
+   (`...app.github.dev`) is now only a scratch loop while awake.
+   Open caveat: `art-slots/icon-192.png|512.png` 404 (placeholder folder) →
+   PWA install icon is default; gameplay unaffected. Fix = drop 2 PNGs.
 2. **Publish / promote.** `LAUNCH.md` go-live; itch via `ITCH_STORE_COPY.md`
    (set `GF_LINKS.itch`); `SOCIAL.md` copy-paste, lead with Daily Sigil.
 3. **Art** (non-blocking): `ART_SHOTLIST.md` → drop PNGs in `art-slots/`.
