@@ -3211,7 +3211,7 @@ document.getElementById('modal-bg').onclick = (e)=>{
 /* PWA install: register service worker + auto-apply new builds. When a new
    SW takes control (new deploy), reload once so the player always lands on
    the latest — no manual cache clearing during playtest/iteration. */
-if('serviceWorker' in navigator){
+if(typeof navigator !== 'undefined' && navigator.serviceWorker){
   let _gfReloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', ()=>{
     if(_gfReloaded) return; _gfReloaded = true; location.reload();
