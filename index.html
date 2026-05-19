@@ -132,8 +132,41 @@
     font-size: 18px;
     color: var(--parchment-dk);
     letter-spacing: 0.05em;
-    margin-bottom: 48px;
+    margin-bottom: 20px;
     max-width: 280px;
+  }
+  .title-meta {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 6px 8px; max-width: 340px; margin-bottom: 26px;
+  }
+  .title-meta:empty { display: none; }
+  .tm-chip {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.04em; color: var(--parchment-sh);
+    border: 1px solid rgba(212,168,73,0.22); border-radius: 3px;
+    padding: 4px 8px; cursor: help;
+  }
+  .tm-chip b { color: var(--gilt-bright); font-weight: 700; }
+  /* Ascension picker (Sigil modal) */
+  .asc-picker {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    margin: 4px 0 14px; padding: 10px;
+    border: 1px solid rgba(168,50,50,0.3); border-radius: 4px;
+    background: rgba(168,50,50,0.06);
+  }
+  .asc-picker button {
+    width: 34px; height: 34px; font-size: 18px; line-height: 1;
+    background: var(--ink-warm); color: var(--gilt);
+    border: 1px solid var(--gilt); border-radius: 4px; cursor: pointer;
+  }
+  .asc-picker button:disabled { opacity: 0.3; cursor: default; }
+  .asc-picker .asc-info { flex: 1; text-align: center; }
+  .asc-picker .asc-name {
+    font-family: 'Cinzel Decorative', serif; font-size: 14px; color: var(--gilt-bright);
+  }
+  .asc-picker .asc-blurb {
+    font-family: 'IM Fell English', serif; font-style: italic;
+    font-size: 12px; color: var(--parchment-dk); margin-top: 2px;
   }
   .menu-buttons {
     display: flex; flex-direction: column;
@@ -1047,6 +1080,7 @@
     </div>
     <h1 class="title">Glyph Forge</h1>
     <p class="subtitle">A codex of bound sigils, awaiting their first inscription.</p>
+    <div class="title-meta" id="title-meta"></div>
     <div class="menu-buttons">
       <button class="btn primary" id="btn-new-run">Begin Inscription</button>
       <button class="btn" id="btn-continue">Continue</button>
@@ -2681,6 +2715,27 @@ function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(id === 'codex-screen') renderCodex();
+  if(id === 'title-screen') renderTitleMeta();
+}
+
+/* Title progression strip — the at-a-glance "what have I earned / what's
+   next" that turns the title screen into a goal board. */
+function renderTitleMeta(){
+  const el = document.getElementById('title-meta');
+  if(!el) return;
+  const m = state.meta;
+  const unlocked = m.ascension || 0;
+  const beaten = m.ascensionBeaten || 0;
+  const cur = ascById(unlocked);
+  const combos = Object.keys(m.discoveredCombos||{}).length;
+  const runes = (m.discoveredRunes||[]).length;
+  const d = m.daily || {};
+  const parts = [];
+  parts.push(`<span class="tm-chip" data-tip="Highest Ascension you've unlocked. Win at your top tier to open the next.">⛰ Depth <b>${cur.name}</b>${beaten<unlocked?` · next: clear ${ascById(beaten+1).name}`:''}</span>`);
+  if(d.streak > 0) parts.push(`<span class="tm-chip" data-tip="Consecutive days you've played the Daily Sigil. Best: ${d.bestStreak||d.streak}.">🔥 Daily streak <b>${d.streak}</b></span>`);
+  parts.push(`<span class="tm-chip" data-tip="Your codex: named fusions and bound glyphs discovered.">✦ Codex <b>${combos}/${NAMED_COMBOS.length}</b> · <b>${runes}/${RUNES.length}</b></span>`);
+  if(m.runsCompleted > 0) parts.push(`<span class="tm-chip" data-tip="Full 13/13 codices you've sealed.">✷ Wins <b>${m.runsCompleted}</b></span>`);
+  el.innerHTML = parts.join('');
 }
 
 function renderCodex(){
@@ -2778,9 +2833,33 @@ function showIntro(){
 
 function chooseSigil(){
   const m = document.getElementById('modal-content');
+  const maxAsc = state.meta.ascension || 0;
+  let pick = maxAsc;  // default to the hardest you've earned
   m.innerHTML = `<h2>Choose Your Sigil</h2>
     <p>Your bond shapes the whole run. Some power is given; some is sealed away.</p>
+    ${maxAsc > 0 ? `<div class="asc-picker">
+      <button id="asc-dn" aria-label="Lower Ascension">−</button>
+      <div class="asc-info">
+        <div class="asc-name" id="asc-name"></div>
+        <div class="asc-blurb" id="asc-blurb"></div>
+      </div>
+      <button id="asc-up" aria-label="Higher Ascension">+</button>
+    </div>` : ''}
     <div class="choices" id="sigil-choices"></div>`;
+  function paintAsc(){
+    const A = ascById(pick);
+    const nm = m.querySelector('#asc-name'), bl = m.querySelector('#asc-blurb');
+    if(nm) nm.textContent = `${A.name}${pick>0?` (Ascension ${pick})`:''}`;
+    if(bl) bl.textContent = pick === 0 ? 'The base codex — as the sim balanced it.' : A.blurb;
+    const up = m.querySelector('#asc-up'), dn = m.querySelector('#asc-dn');
+    if(up) up.disabled = pick >= maxAsc;
+    if(dn) dn.disabled = pick <= 0;
+  }
+  if(maxAsc > 0){
+    m.querySelector('#asc-up').onclick = ()=>{ if(pick<maxAsc){ pick++; GFAudio.tap(); paintAsc(); } };
+    m.querySelector('#asc-dn').onclick = ()=>{ if(pick>0){ pick--; GFAudio.tap(); paintAsc(); } };
+    paintAsc();
+  }
   const list = m.querySelector('#sigil-choices');
   SIGILS.forEach(s=>{
     const forb = (s.forbid&&s.forbid.length) ? ` · seals ${s.forbid.join('/')}` : '';
@@ -2794,7 +2873,7 @@ function chooseSigil(){
         <span class="desc">${s.desc}</span>
         <span class="tags">${(s.maxHp||50)} HP${forb}${champ}</span>
       </div>`;
-    el.onclick = ()=>{ hideModal(); startNewRun(undefined, s.id); showScreen('game-screen'); };
+    el.onclick = ()=>{ hideModal(); startNewRun(undefined, s.id, pick); showScreen('game-screen'); };
     list.appendChild(el);
   });
   document.getElementById('modal-bg').classList.add('active');
