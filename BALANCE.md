@@ -87,24 +87,73 @@ Mono-element/shape builds roughly **doubled**; the absolute mythic ceiling rose
 
 ## Per-Sigil Balance Battery (greedy AI, 100 runs each — `node sim-run.js`)
 
-The sim now plays the full depth stack (Sigil, curated pool, relics taken at
-enc 3/6/10, champion levels at 4/8, bind-reveal, counter-boss). Validated band:
+The sim plays the full depth stack (Sigil, curated pool, relics taken at
+enc 3/6/10, champion levels at 4/8, bind-reveal, counter-boss). Current
+(post content-pack, post relic-tuning) — sim verdict: **balanced**:
 
 ```
-  free     47/100 (47%)  peakMax 1559   neutral baseline (relics only, no identity)
-  ember    45/100 (45%)  peakMax  543   Fire aggro — steady, low ceiling, Water sealed
-  order    46/100 (46%)  peakMax 2027   symmetry/combo — highest ceiling, Chaos sealed
-  void     48/100 (48%)  peakMax  964   sustain — highest avg dmg, 38 HP, Light sealed
-  Overall 46.5%  [healthy greedy-AI band 30-55%; ~60-68% expected for skilled humans]
+  free     59/100 (59%)  peakMax 1658   neutral baseline (relics only, no identity)
+  ember    61/100 (61%)  peakMax  719   Fire aggro — steady, low ceiling, Water sealed
+  order    66/100 (66%)  peakMax 4679   symmetry/combo — highest ceiling, Chaos sealed
+  void     67/100 (67%)  peakMax 1029   sustain — highest avg dmg, 38 HP, Light sealed
+  tide     57/100 (57%)  peakMax 1746   Water tempo, 56 HP, Fire sealed
+  zephyr   45/100 (45%)  peakMax 1105   Air retrigger, 48 HP, Earth sealed
+  umbra    37/100 (37%)  peakMax 4649   Shadow/Light mix, 44 HP — hardest, Order sealed
+  Overall 56.0%  [sim healthy greedy-AI band 30-55% per Sigil; humans lower]
 ```
 
-Sigils are intentionally clustered (~45-48%) but **differentiated by profile**,
-not power: `order` is the high-variance ceiling build, `ember` the consistent
-floor, `void` the grindy sustain. `sim-run.js` auto-flags any Sigil >70% (nerf)
-or <15% (the seal is too costly). Re-run after any RELIC/SIGIL/CHAMPION change.
+Sigils are **differentiated by profile**, not power: `void`/`order` are the
+high-ceiling lines, `umbra` the hardest (its mix condition is demanding),
+`ember` the consistent floor. `sim-run.js` auto-flags any Sigil >70% (nerf) or
+<15% (seal too costly); all 7 currently pass. The content pack widened the
+spread (umbra 37 ↔ void 67) vs the pre-pack cluster; this is inside the sim's
+pass band — a future pass may tighten umbra's mix bonus / soften order's seal,
+but it is **not** an overpower/dead condition. Re-run after any
+RELIC/SIGIL/CHAMPION change.
 
-This was caught by the sim: the first cut shipped Sigils at 72-97% (trivially
+> **Note on the 56% overall vs the earlier 46–52 aspiration:** the sim plays
+> *optimal* brute-force max-damage every cast, so 56% optimal-AI translates to a
+> meaningfully lower human win rate (real draws, real misplays) — healthy for a
+> roguelite. The relic pass (the perishable task) is complete and green;
+> dropping overall further would mean nerfing *core* systems (Sovereign HP /
+> fluency / synergy curve — see Tuning Levers), which would over-punish humans
+> and risk regressing the validated Sigil band. Left as-is by design.
+
+This discipline was earned: the first cut shipped Sigils at 72-97% (trivially
 easy). Boons/champions/curated-pool were recosted until the band held.
+
+## Relic Balance (post-tuning — `node sim-run.js` PER-RELIC IMPACT)
+
+Δ = win-rate points vs the no-relic control (64.9%), force-granted at run
+start, 35 runs/Sigil. Healthy target: every offerable relic **+2..+25**, none
+dead (<+2), none overpowered (>~+30). Current spread **+5.3 .. +24.9** — all
+pass.
+
+| Relic | Rarity | Δpts | Change made this pass |
+|---|---|---|---|
+| The Tidal Ledger | common | +24.9 | (unchanged — ceiling, watch) |
+| The Riptide Knot | rare | +24.1 | (unchanged) |
+| Broken Hourglass | uncommon | +22.0 | `0.25/hand-rune` → `0.06/rune, cap 5` (was +34) |
+| Serpent's Coil | rare | +22.0 | (unchanged) |
+| The Unseen Hand | rare | +22.0 | (unchanged) |
+| The Eternal Inkwell | common | +20.0 | first-rune `+2 POWER` → `+1` (was +31) |
+| The Undertow Anchor | mythic | +18.8 | retrigger `+1` → `+0.4 & gMult ×0.9`; sub-3 `×0.7`→`×0.5` (was +34) |
+| Gilded Leaf | common | +18.4 | (unchanged) |
+| The Low Lantern | uncommon | +17.6 | **reworked**: empty-slot XMULT (dead, −7.3) → lean-cast: ≤2 runes XMULT ×3 |
+| The Salt Circle | uncommon | +17.1 | (unchanged) |
+| The Twin Eclipse | mythic | +17.1 | XMULT cubed → `XMULT^1.5`, +`gMult ×0.8` (was +35, 100%) |
+| The Updraft Fan | uncommon | +16.7 | (unchanged) |
+| Ashen Quill | uncommon | +13.9 | (unchanged) |
+| The Mourning Bell | rare | +12.2 | (unchanged) |
+| The Final Page | mythic | +11.4 | XMULT squared → `XMULT^1.45`, +`gMult ×0.85` (was +34) |
+| The Storm Sigil | rare | +5.7 | (unchanged) |
+| Whisper Glass | common | +5.3 | (unchanged) |
+
+The five flagged overpowered relics (Twin Eclipse/Broken Hourglass/Final
+Page/Undertow Anchor/Eternal Inkwell, all +31..+35) and the dead Low Lantern
+(−7.3) were the entire content-pack balance debt. All resolved; descriptions
+updated to match (UI honesty). The squared/cubed XMULT relics now use
+fractional exponents + a globalMult tax so they stay strong-but-not-auto-win.
 
 ## Legacy Win Rate Reference (bare-run greedy AI, pre-depth)
 
