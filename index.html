@@ -334,11 +334,20 @@
     background: var(--ink-warm);
     border: 1px solid var(--crimson-dk);
     overflow: hidden;
+    position: relative;
   }
   .enemy-hp-bar > div {
+    position: absolute; left: 0; top: 0;
     height: 100%;
+  }
+  /* chip damage: a pale ghost that lags the red fill, then catches up */
+  #enemy-hp-ghost {
+    background: rgba(240, 196, 106, 0.55);
+    transition: width 0.65s ease-out 0.18s;
+  }
+  #enemy-hp-fill {
     background: linear-gradient(to right, var(--crimson), var(--crimson-dk));
-    transition: width 0.5s ease-out;
+    transition: width 0.28s ease-out;
   }
   .threat-meter {
     display: flex; gap: 4px; margin-top: 4px;
@@ -375,6 +384,45 @@
     20%  { transform: translate(-50%, -10px) scale(1.2); opacity: 1; }
     100% { transform: translate(-50%, -120px) scale(0.9); opacity: 0; }
   }
+  /* magnitude tiers — bigger hits read bigger & hotter */
+  .damage-pop.tier-1 { font-size: 30px; }
+  .damage-pop.tier-2 { font-size: 40px; }
+  .damage-pop.tier-3 { font-size: 54px; color: var(--gilt-bright);
+    text-shadow: 0 0 16px var(--gilt), 0 0 34px var(--gilt), 0 2px 0 var(--ink-deep); }
+  .damage-pop.tier-4 { font-size: 70px; color: #ffe6a0;
+    text-shadow: 0 0 22px var(--gilt-bright), 0 0 48px var(--crimson), 0 2px 0 var(--ink-deep); }
+  .damage-pop.crit { color: var(--crimson); }
+  .damage-pop.crit.tier-3, .damage-pop.crit.tier-4 {
+    color: #ff7a5c; text-shadow: 0 0 24px var(--crimson), 0 0 52px var(--crimson); }
+
+  /* full-viewport flash on big payoffs (inert under reduced-motion) */
+  #gf-screen-flash {
+    position: fixed; inset: 0; z-index: 90;
+    pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(240,196,106,0.42), rgba(168,50,50,0.10) 60%, transparent 75%);
+  }
+  #gf-screen-flash.fire { animation: gfFlash 0.42s ease-out; }
+  @keyframes gfFlash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* screen shake — transform only, never reflows the flex layout */
+  #app.gf-shake-1 { animation: gfShake1 0.26s ease-in-out; }
+  #app.gf-shake-2 { animation: gfShake2 0.42s ease-in-out; }
+  @keyframes gfShake1 {
+    0%,100% { transform: translate(0,0); }
+    25% { transform: translate(-3px,1px); } 50% { transform: translate(3px,-1px); }
+    75% { transform: translate(-2px,1px); }
+  }
+  @keyframes gfShake2 {
+    0%,100% { transform: translate(0,0); }
+    15% { transform: translate(-7px,2px); } 30% { transform: translate(6px,-3px); }
+    45% { transform: translate(-6px,2px); } 60% { transform: translate(5px,-2px); }
+    80% { transform: translate(-3px,1px); }
+  }
+  /* readout "heat": the live damage preview warms as it climbs */
+  .spell-damage.heat-2 { color: #ffd97a; text-shadow: 0 0 8px rgba(240,196,106,0.6); }
+  .spell-damage.heat-3 { color: #ffb15c; text-shadow: 0 0 12px rgba(240,160,90,0.8); }
+  .spell-damage.heat-4 { color: #ff7a5c;
+    text-shadow: 0 0 14px var(--crimson), 0 0 26px rgba(168,50,50,0.7); }
 
   /* ----- Spell slots ----- */
   .spell-area {
@@ -919,6 +967,13 @@
     letter-spacing: 0.3em;
     margin-top: 6px;
   }
+  /* a heavier banner for a brand-new or high-magnitude fusion */
+  .combo-banner.big {
+    border-color: var(--gilt-bright);
+    box-shadow: 0 0 60px var(--gilt-bright), 0 0 120px rgba(168,50,50,0.35);
+  }
+  .combo-banner.big .name { font-size: 30px; color: #ffe6a0;
+    text-shadow: 0 0 18px var(--gilt-bright); }
 
   /* ----- Juice: tap targets (44px min) + reduced-motion ----- */
   button.btn.small { min-height: 44px; }
@@ -939,6 +994,7 @@
 </style>
 </head>
 <body>
+<div id="gf-screen-flash" aria-hidden="true"></div>
 <div id="app">
 
   <!-- ============ TITLE ============ -->
@@ -994,7 +1050,7 @@
         </div>
         <div class="enemy-name" id="enemy-name">—</div>
         <div class="enemy-hp-row">
-          <div class="enemy-hp-bar"><div id="enemy-hp-fill" style="width: 100%"></div></div>
+          <div class="enemy-hp-bar"><div id="enemy-hp-ghost" style="width: 100%"></div><div id="enemy-hp-fill" style="width: 100%"></div></div>
           <span id="enemy-hp-text">0/0</span>
         </div>
         <div class="threat-meter" id="threat-meter"></div>
@@ -2033,7 +2089,7 @@ function cast(){
       runeIds: result.presentRunes.map(r=>r.id),
       firstSeen: existing?.firstSeen || Date.now(),
     };
-    showComboBanner(result.comboMatch.name, isNew);
+    showComboBanner(result.comboMatch.name, isNew, isNew || result.damage >= 120);
     GFAudio.combo(isNew);
   }
 
@@ -2457,7 +2513,10 @@ function renderGame(){
 
   // Spell readout
   const dmg = previewSpellDamage();
-  document.getElementById('spell-damage').textContent = dmg > 0 ? dmg : '—';
+  const sdEl = document.getElementById('spell-damage');
+  sdEl.textContent = dmg > 0 ? dmg : '—';
+  const heat = dmg <= 0 ? 0 : gfDamageTier(dmg);
+  sdEl.className = 'spell-damage' + (heat >= 2 ? ' heat-' + heat : '');
   document.getElementById('spell-formula').textContent = formulaText(present);
 
   // Hand
@@ -2673,22 +2732,58 @@ function bindLongPress(el, fn){
   el.addEventListener('mouseleave', cancel);
 }
 
+function gfDamageTier(amount){
+  if(amount >= 250) return 4;
+  if(amount >= 80)  return 3;
+  if(amount >= 25)  return 2;
+  return 1;
+}
+/* screen-level payoff feedback — flash + shake, scaled, all transform/opacity
+   so the flex layout never reflows. Silent under prefers-reduced-motion. */
+function gfImpact(tier, crit){
+  if(gfReducedMotion()) return;
+  const big = tier >= 4;
+  if(tier >= 3 || crit){
+    const fl = document.getElementById('gf-screen-flash');
+    if(fl){ fl.classList.remove('fire'); void fl.offsetWidth; fl.classList.add('fire'); }
+  }
+  const app = document.getElementById('app');
+  if(app && (tier >= 3 || crit)){
+    const cls = big ? 'gf-shake-2' : 'gf-shake-1';
+    app.classList.remove('gf-shake-1','gf-shake-2'); void app.offsetWidth;
+    app.classList.add(cls);
+    setTimeout(()=>app.classList.remove(cls), big ? 440 : 280);
+  }
+  gfHaptic(big ? [12,40,18] : tier >= 3 ? 22 : crit ? 16 : 8);
+}
 function showDamage(amount, crit){
   const stage = document.getElementById('enemy-stage');
   const r = stage.getBoundingClientRect();
   const portrait = document.getElementById('enemy-portrait').getBoundingClientRect();
+  const tier = gfDamageTier(amount);
   const pop = document.createElement('div');
-  pop.className = 'damage-pop' + (crit ? ' crit' : '');
+  pop.className = 'damage-pop tier-' + tier + (crit ? ' crit' : '');
   pop.textContent = amount;
   pop.style.left = (portrait.left + portrait.width/2 - r.left) + 'px';
   pop.style.top = (portrait.top - r.top + portrait.height/2) + 'px';
   stage.appendChild(pop);
+  // count-up: numbers tick up so a big hit feels like it lands hard
+  if(!gfReducedMotion() && amount >= 25 && typeof requestAnimationFrame === 'function'){
+    const dur = Math.min(480, 240 + tier*70), t0 = (typeof performance!=='undefined'?performance.now():Date.now());
+    const step = (now)=>{
+      const k = Math.min(1, (now - t0)/dur);
+      pop.textContent = Math.round(amount * (1 - Math.pow(1-k, 3)));
+      if(k < 1) requestAnimationFrame(step); else pop.textContent = amount;
+    };
+    requestAnimationFrame(step);
+  }
+  gfImpact(tier, crit);
   setTimeout(()=>pop.remove(), 1200);
 }
 
-function showComboBanner(name, isNew){
+function showComboBanner(name, isNew, big){
   const b = document.createElement('div');
-  b.className = 'combo-banner' + (isNew ? ' new' : '');
+  b.className = 'combo-banner' + (isNew ? ' new' : '') + (big ? ' big' : '');
   b.innerHTML = `
     <div class="label">fusion</div>
     <div class="name">${name}</div>
