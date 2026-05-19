@@ -1,9 +1,28 @@
 # RESUME — pick up here the moment you say "lets get started"
 
-**Status: BUILD COMPLETE & SAFE.** `node test.js` green, `node sim-run.js`
-verdict *"depth systems balanced; determinism holds"*, everything committed &
-pushed to `main`. The game is fully playable, balanced, audible, juiced, and
-documented. The whole prior build queue is done.
+**Status: BUILD COMPLETE & SAFE + in playtest-iterate loop.** `node test.js`
+green, `node sim-run.js` verdict *"depth systems balanced; determinism holds"*,
+all committed & pushed to `main`. Build stamp on the title strip:
+**`2026-05-19 · b10 meta+mobilefix`** (bump `GF_BUILD` in index.html + the
+`CACHE` in sw.js every deploy; PWA now auto-updates within ~60s).
+
+### Picking up in the morning — first things
+1. The user will have **test-played more** → ask for / expect notes; turn each
+   into a tested fix (gate every commit on `node test.js` green BEFORE
+   `git commit` — use `&&`, never `;`, that mistake pushed a broken commit
+   once this session, fixed in 97c1514).
+2. **Card list is ready (the user asked for this):** `ART_CARDLIST.csv`
+   (Google-Drive-ready → opens as a Sheet, has a Status column) +
+   `ART_CARDLIST.md`. 36 cards + 8 enemies + 3 brand = 47 assets; 6
+   content-pack runes flagged as needing fresh art direction. Regenerate
+   after any content change: `node tools/cardlist.mjs`. To get it to Drive:
+   download the CSV from the VS Code explorer (right-click → Download) and
+   upload to Drive, or pull from the repo.
+3. Recent session work (committed): balance tune, audio, juice (A/B/C),
+   marketing+docs, **meta-progression spine** (Ascension ladder + Daily
+   streak/score + Codex Mastery — additive, sim-inert), mobile fixes
+   (dropped viewport-fit=cover; 100svh; cast-row clearance — fixed Pixel 9
+   bottom-button clipping), build stamp + SW auto-update.
 
 ## Done & shipped (committed/pushed)
 - All 6 deep-design phases (two-track engine, Sigils, relics, Champion, Rune
