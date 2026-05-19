@@ -529,6 +529,14 @@
   .spell-slots {
     display: flex; gap: 8px; justify-content: center;
   }
+  .spell-coach {
+    margin-top: 7px; text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; letter-spacing: 0.03em;
+    color: #c7a155; opacity: 0.9;
+    transition: opacity 0.25s ease;
+  }
+  .spell-coach:empty { display: none; }
   .spell-slot {
     flex: 1;
     aspect-ratio: 1;
@@ -1165,6 +1173,7 @@
         <div class="spell-slot" data-slot="1">II</div>
         <div class="spell-slot" data-slot="2">III</div>
       </div>
+      <div class="spell-coach" id="spell-coach"></div>
     </div>
 
     <div class="hand-area">
@@ -1798,6 +1807,20 @@ function ensureRunDepth(run){
   if(typeof run.castCount !== 'number') run.castCount = 0;
 }
 function sigilOf(run){ return SIGILS.find(s=>s.id===(run&&run.sigil))||SIGILS[0]; }
+/* Apprentice Inscription — onboarding scaffolding for the new-player cliff.
+   Sim-derived (tools/retention-sim.js): a railed deck + teaching the strong
+   line, TOGETHER, lift D7 ~+6pts (Lapsed everWon 0→92%); either alone barely
+   moves. Gate to low Ascension / pre-first-win so it never flattens the build
+   depth that retains veterans (A≥3 → fully off, baseline unchanged). Only the
+   reward-pool weighting + a hint string change — combat math (resolveSpell) is
+   untouched, so the balance/determinism sims still hold. 0 off / 1 light / 2 full. */
+function runHelp(){
+  const m = state.meta || {};
+  const asc = (state.run && state.run.asc) || 0;
+  if(asc >= 3) return 0;                                  // veterans: no scaffolding
+  if((m.runsCompleted||0) === 0 && asc === 0) return 2;   // brand-new: full
+  return 1;                                               // climbing / has won: light
+}
 // Depth hooks merged into the spell pipeline. 'pre' runs before the tally
 // (POWER edits); 'post' runs after element/shape synergy (XMULT edits).
 function applyDepth(ctx, run, phase){
@@ -2407,12 +2430,22 @@ function showRewardModal(){
   const _bound = new Set([...(run.boundElements||[]), sigilOf(run).element].filter(Boolean));
   pool = pool.filter(r => (r.rarity==='common'||r.rarity==='uncommon') || _bound.has(r.element));
 
-  // Phase 4: curated pool — bias offers toward your Sigil's element so the
-  // build identity can actually snowball (StS-style curated pools).
+  // Phase 4 + Apprentice rail: bias offers toward your Sigil's element so the
+  // build identity can snowball (StS-style curated pools). Rail STRENGTH scales
+  // with onboarding help — a railed deck is what makes the taught line
+  // assemble-able for shallow players (sim: DR alone +1.2 D7, DR+P2 +6.0).
   const _sg = sigilOf(run);
   if(_sg && _sg.element){
+    const _help = runHelp();
     const boost = pool.filter(r=> r.element===_sg.element);
-    pool = pool.concat(boost); // ~2x weight for on-identity runes
+    if(_help >= 2){
+      // strong rail (≈ sim DR): pool ≈ on-element ∪ basic runes
+      const railed = pool.filter(r=> r.element===_sg.element || r.rarity==='common' || r.rarity==='uncommon');
+      if(railed.length >= 3) pool = railed;
+    } else {
+      pool = pool.concat(boost);                  // baseline ~2x (UNCHANGED at A≥3)
+      if(_help === 1) pool = pool.concat(boost);  // light ~3x while climbing
+    }
   }
   if(pool.length < 3) pool = RUNES.filter(r=> r.rarity==='common'||r.rarity==='uncommon'); // safety
 
@@ -2709,6 +2742,26 @@ function renderGame(){
   const heat = dmg <= 0 ? 0 : gfDamageTier(dmg);
   sdEl.className = 'spell-damage' + (heat >= 2 ? ' heat-' + heat : '');
   document.getElementById('spell-formula').textContent = formulaText(present);
+
+  // P2 "teach the ceiling": point brand-new players at the strong multi-rune
+  // line. The deck-rail (above) makes ≥3 of one element actually land in hand,
+  // so this advice is followable. Fades once they stage it / win / climb.
+  const coachEl = document.getElementById('spell-coach');
+  if(coachEl){
+    let msg = '';
+    if(runHelp() >= 2){
+      const byEl = {};
+      run.hand.forEach(id=>{ const r=RUNES.find(x=>x.id===id); if(r) byEl[r.element]=(byEl[r.element]||0)+1; });
+      const topEl = Object.keys(byEl).sort((a,b)=>byEl[b]-byEl[a])[0];
+      const monoStaged = present.length>=3 && new Set(present.map(r=>r.element)).size===1;
+      if(!monoStaged && topEl && byEl[topEl] >= 3){
+        msg = `▲ Fuse 3 ${topEl} runes in one spell — huge hit`;
+      } else if(present.length===0 && topEl && byEl[topEl] >= 2){
+        msg = `▲ Stack one element — your ${topEl} runes combo hard`;
+      }
+    }
+    coachEl.textContent = msg;
+  }
 
   // Hand
   const handEl = document.getElementById('hand-grid');
@@ -3047,7 +3100,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b10 meta+mobilefix';
+const GF_BUILD = '2026-05-19 · b11 apprentice';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
