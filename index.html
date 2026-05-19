@@ -937,6 +937,7 @@
       <button class="btn" id="btn-codex">The Codex</button>
       <button class="btn small" id="btn-daily">Daily Sigil</button>
       <button class="btn small" id="btn-howto">How to Play</button>
+      <button class="btn small" id="btn-mute">🔊 Sound</button>
     </div>
     <a id="gf-itch-link" class="gf-itch-link" href="#" target="_blank" rel="noopener" hidden>Pay-what-you-want on itch.io ↗</a>
   </section>
@@ -963,6 +964,7 @@
         <span class="hud-stat fluency-stat" id="hud-fluency-wrap" title="Fluency — each defeated enemy boosts spell damage by 10%">✦ <strong id="hud-fluency">×1.00</strong></span>
       </div>
       <div class="hud-right">
+        <button class="btn icon small" id="btn-mute-hud" aria-label="Toggle sound">🔊</button>
         <button class="btn icon small" id="btn-flee">⌫</button>
       </div>
     </div>
@@ -1037,6 +1039,98 @@
    Stack: vanilla JS, no deps. Single file. PWA-ready.
    Persistence: localStorage (key = 'glyph-forge-v1').
    ================================================================ */
+
+/* ----- 0. AUDIO — zero-dependency synthesized SFX -----
+   No asset files, no libraries: a tiny Web Audio synth. INERT in Node — both
+   test.js and sim-run.js stub `window` without AudioContext, so `AC` is falsy,
+   the IIFE returns no-ops, and nothing is constructed at load (tests stay
+   green). Mute preference persists under its OWN key 'gf-muted'; the save
+   schema 'glyph-forge-v1' is never touched (additive discipline). */
+const GFAudio = (function(){
+  const AC = (typeof window !== 'undefined') && (window.AudioContext || window.webkitAudioContext);
+  const NOOP = { cast(){}, combo(){}, reward(){}, hit(){}, victory(){}, defeat(){},
+                 tap(){}, toggleMute(){return false;}, isMuted(){return false;}, _unlock(){} };
+  if(!AC) return NOOP;
+
+  let ctx = null, master = null, muted = false;
+  try { muted = localStorage.getItem('gf-muted') === '1'; } catch(e){}
+
+  function ensure(){
+    if(ctx){ if(ctx.state === 'suspended') ctx.resume(); return ctx; }
+    try {
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = 0.30;
+      master.connect(ctx.destination);
+    } catch(e){ ctx = null; }
+    return ctx;
+  }
+  function tone(freq, t0, dur, type, peak){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak || 0.4, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function sweep(f1, f2, t0, dur, type, peak){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f1, t0);
+    o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak || 0.4, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(t0, dur, peak){
+    const n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * (1 - i/n);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(peak || 0.35, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1700;
+    src.connect(lp); lp.connect(g); g.connect(master);
+    src.start(t0); src.stop(t0 + dur + 0.02);
+  }
+  function arp(freqs, step, type, peak){
+    const t = ctx.currentTime;
+    freqs.forEach((f,i)=> tone(f, t + i*step, step*1.7, type, peak));
+  }
+  const guard = fn => function(){ if(muted || !ensure()) return; try { fn.apply(null, arguments); } catch(e){} };
+
+  const api = {
+    tap:    guard(()=>{ tone(420, ctx.currentTime, 0.05, 'triangle', 0.16); }),
+    cast:   guard((crit)=>{ const t = ctx.currentTime;
+                  sweep(crit?320:255, crit?920:600, t, 0.22, 'sawtooth', 0.32);
+                  if(crit) tone(1320, t+0.10, 0.18, 'sine', 0.22); }),
+    combo:  guard((isNew)=>{ arp(isNew?[523,659,784,1047]:[523,659,784], 0.07, 'square', 0.24); }),
+    reward: guard(()=>{ arp([392,523,659,784], 0.08, 'sine', 0.28); }),
+    hit:    guard((crit)=>{ const t = ctx.currentTime;
+                  noise(t, crit?0.22:0.13, crit?0.46:0.30);
+                  tone(crit?90:130, t, 0.12, 'square', 0.22); }),
+    victory:guard(()=>{ arp([523,659,784,1047,1319], 0.12, 'sine', 0.32); }),
+    defeat: guard(()=>{ const t = ctx.currentTime;
+                  sweep(330, 70, t, 0.9, 'sawtooth', 0.32); tone(110, t, 0.9, 'sine', 0.18); }),
+    toggleMute(){ muted = !muted; try { localStorage.setItem('gf-muted', muted?'1':'0'); } catch(e){}
+                  if(!muted) ensure(); return muted; },
+    isMuted(){ return muted; },
+    _unlock(){ if(!muted) ensure(); },
+  };
+  if(typeof window !== 'undefined' && window.addEventListener){
+    const unlock = ()=>{ api._unlock();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock); };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+  }
+  return api;
+})();
 
 /* ----- 1. RUNE DEFINITIONS -----
    Properties:
@@ -1907,6 +2001,7 @@ function cast(){
       firstSeen: existing?.firstSeen || Date.now(),
     };
     showComboBanner(result.comboMatch.name, isNew);
+    GFAudio.combo(isNew);
   }
 
   // Phase 5/6: bind elements, fire transmutations/prophecy, advance the
@@ -1926,10 +2021,12 @@ function cast(){
   for(let i=0;i<result.bonusDraw;i++) drawOne();
 
   // play damage pop
+  GFAudio.cast(result.crit);
   showDamage(result.damage, result.crit);
 
   // enemy reaction
   const stage = document.getElementById('enemy-portrait');
+  GFAudio.hit(result.crit);
   stage.classList.add('hit');
   setTimeout(()=>stage.classList.remove('hit'), 420);
 
@@ -1977,6 +2074,7 @@ function onEnemyDefeated(){
 }
 
 function onDefeat(){
+  GFAudio.defeat();
   window._gfResult = { seed: state.run && state.run.seed, reached: state.run ? state.run.encounterIdx + 1 : 1, won: false };
   showModal({
     title: 'The Ink Runs Dry',
@@ -1992,6 +2090,7 @@ function onDefeat(){
 }
 
 function onVictory(){
+  GFAudio.victory();
   window._gfResult = { seed: state.run && state.run.seed, reached: 13, won: true };
   state.meta.runsCompleted += 1;
   state.meta.bestRun = Math.max(state.meta.bestRun, 13);
@@ -2011,6 +2110,7 @@ function onVictory(){
 
 /* ----- 10. REWARD MODAL ----- */
 function showRewardModal(){
+  GFAudio.reward();
   const run = state.run;
   const rng = mulberry32(run.rngSeed + run.encounterIdx * 31);
 
@@ -2370,6 +2470,7 @@ function handleHandTap(handIdx){
 
 function handleSlotTap(slotIdx){
   const run = state.run;
+  GFAudio.tap();
   if(run.spell[slotIdx]){
     run.hand.push(run.spell[slotIdx]);
     run.spell[slotIdx] = null;
@@ -2615,6 +2716,17 @@ document.getElementById('btn-continue').onclick = ()=>{
   }
 };
 document.getElementById('btn-howto').onclick = ()=>showIntro();
+function updateMuteUI(){
+  const m = GFAudio.isMuted();
+  const b1 = document.getElementById('btn-mute');
+  const b2 = document.getElementById('btn-mute-hud');
+  if(b1) b1.textContent = m ? '🔇 Muted' : '🔊 Sound';
+  if(b2) b2.textContent = m ? '🔇' : '🔊';
+}
+function toggleMute(){ GFAudio.toggleMute(); if(!GFAudio.isMuted()) GFAudio.tap(); updateMuteUI(); }
+document.getElementById('btn-mute').onclick = toggleMute;
+document.getElementById('btn-mute-hud').onclick = toggleMute;
+updateMuteUI();
 document.getElementById('btn-codex').onclick = ()=>showScreen('codex-screen');
 document.getElementById('btn-codex-back').onclick = ()=>showScreen('title-screen');
 document.getElementById('btn-back-title').onclick = ()=>showScreen('title-screen');
