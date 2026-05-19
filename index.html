@@ -731,6 +731,46 @@
     50% { box-shadow: 0 2px 0 var(--ink-deep), 0 0 20px rgba(212,168,73,0.4); }
   }
 
+  /* ============ IN-RUN FIELD GUIDE (dockable, non-blocking) ============ */
+  #game-screen { position: relative; }
+  #guide-panel {
+    display: none;
+    position: absolute; top: 0; left: 0; right: 0;
+    /* covers the enemy/spell area only — hand + cast row stay visible &
+       tappable so you can read the guide WHILE looking at your hand */
+    height: 60%;
+    background: rgba(10,7,5,0.97);
+    border-bottom: 2px solid var(--gilt);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    z-index: 60;
+    padding: 14px 14px 18px;
+  }
+  #guide-panel.open { display: block; }
+  #btn-guide-close {
+    position: absolute; top: 8px; right: 8px; z-index: 2;
+  }
+  #guide-panel-body { padding-top: 2px; }
+
+  /* ============ MOBILE READABILITY — single dial: --ui ============ */
+  /* Bigger hand cards + text NOW (pre-art). Tune --ui up/down to taste;
+     it scales the hand grid sizing. Card-internal & control fonts bumped
+     to comfortable phone sizes. */
+  :root { --ui: 1.15; }
+  .hand-grid {
+    grid-template-columns: repeat(4, 1fr);   /* was 5 — ~55% more card area */
+    gap: 8px;
+  }
+  .rune-name  { font-size: 11px; }
+  .rune-stats { font-size: 10px; }
+  .rune-art.placeholder::after { font-size: calc(28px * var(--ui)); }
+  .spell-readout #spell-formula { font-size: 13px; }
+  .spell-damage { font-size: 24px; }
+  .spell-coach { font-size: 12px; }
+  .hand-label span { font-size: 13px; }
+  .cast-row button { font-size: 16px; min-height: 52px; }
+  .cast-row button.cast { font-size: 19px; }
+
   /* ============ MODAL / OVERLAY ============ */
   .modal-bg {
     position: fixed; inset: 0;
@@ -1138,6 +1178,10 @@
 
   <!-- ============ GAME / COMBAT ============ -->
   <section id="game-screen" class="screen">
+    <div id="guide-panel" aria-label="Field guide">
+      <button class="btn icon small" id="btn-guide-close" aria-label="Close guide">✕</button>
+      <div id="guide-panel-body"></div>
+    </div>
     <div class="hud">
       <div class="hud-left">
         <span class="hud-stat">⚔ <strong id="hud-encounter">1</strong>/13</span>
@@ -1146,7 +1190,6 @@
         <span class="hud-stat fluency-stat" id="hud-fluency-wrap" data-tip="Fluency — each defeated enemy boosts spell damage by +6% (up to +72%)">✦ <strong id="hud-fluency">×1.00</strong></span>
       </div>
       <div class="hud-right">
-        <button class="btn icon small" id="btn-guide" aria-label="Field guide — your named fusions">✦</button>
         <button class="btn icon small" id="btn-mute-hud" aria-label="Toggle sound">🔊</button>
         <button class="btn icon small" id="btn-flee">⌫</button>
       </div>
@@ -1189,7 +1232,7 @@
     </div>
 
     <div class="cast-row">
-      <button class="btn" id="btn-clear">Recall</button>
+      <button class="btn" id="btn-guide-bar" aria-label="Field guide — open/close while you read your hand">✦ Codex</button>
       <button class="btn cast" id="btn-cast" disabled>Inscribe</button>
     </div>
   </section>
@@ -2767,6 +2810,9 @@ function renderGame(){
     coachEl.textContent = msg;
   }
 
+  // keep the dockable guide live as the hand changes (stage/recall/draw)
+  if(document.getElementById('guide-panel').classList.contains('open')) renderGuidePanel();
+
   // Hand
   const handEl = document.getElementById('hand-grid');
   handEl.innerHTML = '';
@@ -2943,7 +2989,9 @@ function hideModal(){
    hand can make RIGHT NOW (hand brute-forced through findComboName, ≤3 = the
    slot cap). Read-only overlay; never reveals undiscovered combos — the
    discovery pillar stays intact. Pairs with the b11 coach. */
-function showRunGuide(){
+function renderGuidePanel(){
+  const body = document.getElementById('guide-panel-body');
+  if(!body) return;
   const run = state.run;
   const known = state.meta.discoveredCombos || {};
   const knownIds = Object.keys(known);
@@ -2963,7 +3011,7 @@ function showRunGuide(){
   const glyphsOf = ids => ids.map(rid=>{ const r=RUNES.find(x=>x.id===rid); return r?r.glyph:'·'; }).join(' ');
   const lbl = t => `<div style="text-align:left;font-family:'JetBrains Mono',monospace;font-size:11px;color:#c7a155;text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px;">${t}</div>`;
 
-  let html = `<h2 style="margin-bottom:4px;">✦ Field Guide</h2>
+  let html = `<h2 style="margin:0 32px 4px 0;font-size:18px;">✦ Field Guide</h2>
     <p style="color:var(--parchment-sh);font-size:12px;margin:0 0 12px;">What you've named — and what this hand can make right now.</p>`;
 
   html += lbl('Ready from your hand');
@@ -2988,13 +3036,13 @@ function showRunGuide(){
     html += `<p style="color:var(--parchment-sh);font-size:12px;margin:0;font-style:italic;">You haven't named a fusion yet. Fuse 3 runes that share an element or a shape — the codex remembers what you discover, forever.</p>`;
   }
 
-  const m = document.getElementById('modal-content');
-  m.innerHTML = `<div style="max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:2px;">${html}</div><div class="choices" id="guide-choices"></div>`;
-  const b = document.createElement('button');
-  b.className = 'btn primary'; b.textContent = 'Close';
-  b.onclick = hideModal;
-  m.querySelector('#guide-choices').appendChild(b);
-  document.getElementById('modal-bg').classList.add('active');
+  body.innerHTML = html;
+}
+function toggleGuide(){
+  const p = document.getElementById('guide-panel');
+  const open = p.classList.toggle('open');
+  if(open) renderGuidePanel();
+  if(window.GFAudio && GFAudio.tap) GFAudio.tap();
 }
 
 /* Phase 4: choose your Sigil (run identity) before a fresh run */
@@ -3162,7 +3210,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b15 fullscreen';
+const GF_BUILD = '2026-05-19 · b16 codex-dock+bigger';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
@@ -3309,8 +3357,8 @@ if(GF_LINKS.itch){
   il.hidden = false;
 }
 document.getElementById('btn-cast').onclick = cast;
-document.getElementById('btn-clear').onclick = clearSpell;
-document.getElementById('btn-guide').onclick = showRunGuide;
+document.getElementById('btn-guide-bar').onclick = toggleGuide;
+document.getElementById('btn-guide-close').onclick = ()=>document.getElementById('guide-panel').classList.remove('open');
 
 /* Tap-to-fullscreen. Android Chrome hides the system nav + URL bars while a
    page is fullscreen, but it must be requested from a user gesture — so fire
