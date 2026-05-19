@@ -3,8 +3,16 @@
 **Status: BUILD COMPLETE & SAFE + in playtest-iterate loop.** `node test.js`
 green, `node sim-run.js` verdict *"depth systems balanced; determinism holds"*,
 all committed & pushed to `main`. Build stamp on the title strip:
-**`2026-05-19 · b11 apprentice`** (bump `GF_BUILD` in index.html + the
-`CACHE` in sw.js every deploy; PWA auto-updates within ~60s).
+**`2026-05-19 · b13 field-guide`** (bump `GF_BUILD` in index.html + the
+`CACHE` in sw.js every deploy; PWA auto-updates within ~60s; note GitHub
+Pages CDN edge can lag ~30-60s behind the build — re-curl, not a failure).
+
+**Playtest-loop builds since b11:** b12 = Pixel-9 bottom-button fix (prior
+session wrongly removed `viewport-fit=cover`, which zeroes
+`env(safe-area-inset-*)`; re-added + 28px floor). b13 = in-run **Field
+Guide** (✦ HUD btn → read-only overlay: discovered fusions + which are
+buildable from current hand via findComboName brute-force; never spoils
+undiscovered — discovery pillar). Both UI/CSS only, sims byte-identical.
 
 **LIVE & always-on:** GitHub Pages (repo public) →
 `https://stephenuffugus.github.io/glyph_forge/`, auto-deploys every push.
