@@ -229,6 +229,33 @@
   .hud-depth .dchip b { color: var(--gilt-bright); font-weight: 700; }
   .hud-depth .dchip.dim { color: var(--parchment-sh); }
   .hud-depth .dprophecy.done { color: var(--verdigris); }
+  /* tap-tooltip: title= is dead on touch — these chips are tappable */
+  .hud-depth .dchip[data-tip], .hud-stat[data-tip] { cursor: help; }
+  .hud-depth .dchip[data-tip]::after {
+    content: ''; display: inline-block; width: 11px; height: 11px;
+    margin-left: 4px; vertical-align: -1px; opacity: 0.5;
+    border: 1px solid currentColor; border-radius: 50%;
+    background: radial-gradient(circle at 50% 42%, currentColor 0 1px, transparent 1.5px);
+  }
+  .dchip.gf-tip-open { outline: 1px solid var(--gilt); outline-offset: 1px; }
+  /* relic rarity tokens */
+  .rtok { display:inline-block; width:6px; height:6px; margin-left:4px;
+    border-radius:50%; vertical-align:1px; }
+  .rtok.r-common   { background: var(--parchment-sh); }
+  .rtok.r-uncommon { background: var(--verdigris); }
+  .rtok.r-rare     { background: var(--violet); box-shadow: 0 0 5px var(--violet); }
+  .rtok.r-mythic   { background: var(--crimson); box-shadow: 0 0 6px var(--crimson); }
+  #gf-tip {
+    position: fixed; z-index: 120; max-width: 76vw;
+    background: var(--ink-deep); color: var(--parchment);
+    border: 1px solid var(--gilt);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.7), 0 0 16px rgba(212,168,73,0.25);
+    padding: 9px 12px; border-radius: 4px;
+    font-family: 'Cormorant Garamond', serif; font-size: 14px; line-height: 1.35;
+    pointer-events: none; opacity: 0; transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+  }
+  #gf-tip.show { opacity: 1; transform: translateY(0); }
   .hud-left, .hud-right { display: flex; align-items: center; gap: 10px; }
   .hud-stat {
     font-family: 'IM Fell English', serif;
@@ -474,13 +501,23 @@
     background: var(--ink-warm);
     cursor: pointer;
   }
-  .spell-slot.synergy-element { box-shadow: 0 0 0 1px var(--verdigris), 0 0 12px rgba(90,141,106,0.4); }
-  .spell-slot.synergy-shape { box-shadow: 0 0 0 1px var(--violet), 0 0 12px rgba(107,77,140,0.4); }
+  .spell-slot.gf-fill { animation: gfSlotFill 0.32s cubic-bezier(0.2,0.7,0.3,1.2); }
+  @keyframes gfSlotFill {
+    0%   { transform: scale(0.7); opacity: 0.2; }
+    60%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  .spell-slot.synergy-element { box-shadow: 0 0 0 1px var(--verdigris), 0 0 12px rgba(90,141,106,0.4); animation: gfThrobV 1.5s ease-in-out infinite; }
+  .spell-slot.synergy-shape { box-shadow: 0 0 0 1px var(--violet), 0 0 12px rgba(107,77,140,0.4); animation: gfThrobP 1.5s ease-in-out infinite; }
   .spell-slot.synergy-both {
     box-shadow:
       0 0 0 1px var(--gilt-bright),
       0 0 16px rgba(240,196,106,0.5);
+    animation: gfThrobG 1.3s ease-in-out infinite;
   }
+  @keyframes gfThrobV { 0%,100% { box-shadow: 0 0 0 1px var(--verdigris), 0 0 10px rgba(90,141,106,0.35); } 50% { box-shadow: 0 0 0 1px var(--verdigris), 0 0 20px rgba(90,141,106,0.7); } }
+  @keyframes gfThrobP { 0%,100% { box-shadow: 0 0 0 1px var(--violet), 0 0 10px rgba(107,77,140,0.35); } 50% { box-shadow: 0 0 0 1px var(--violet), 0 0 20px rgba(107,77,140,0.7); } }
+  @keyframes gfThrobG { 0%,100% { box-shadow: 0 0 0 1px var(--gilt-bright), 0 0 14px rgba(240,196,106,0.4); } 50% { box-shadow: 0 0 0 1px var(--gilt-bright), 0 0 26px rgba(240,196,106,0.8); } }
 
   /* ----- Hand area ----- */
   .hand-area {
@@ -640,7 +677,13 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
   }
-  .modal-bg.active { display: flex; }
+  .modal-bg.active { display: flex; animation: gfModalBg 0.22s ease-out; }
+  @keyframes gfModalBg { from { opacity: 0; } to { opacity: 1; } }
+  .modal-bg.active .modal { animation: gfModalIn 0.28s cubic-bezier(0.2,0.7,0.3,1.15); }
+  @keyframes gfModalIn {
+    0% { opacity: 0; transform: translateY(14px) scale(0.94); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
   .modal {
     background: var(--ink-mid);
     border: 1px solid var(--gilt);
@@ -1034,7 +1077,7 @@
         <span class="hud-stat">⚔ <strong id="hud-encounter">1</strong>/13</span>
         <div class="hp-bar"><div id="hud-hp-fill" style="width: 100%"></div></div>
         <span class="hud-stat">♥ <strong id="hud-hp">50</strong></span>
-        <span class="hud-stat fluency-stat" id="hud-fluency-wrap" title="Fluency — each defeated enemy boosts spell damage by 10%">✦ <strong id="hud-fluency">×1.00</strong></span>
+        <span class="hud-stat fluency-stat" id="hud-fluency-wrap" data-tip="Fluency — each defeated enemy boosts spell damage by +6% (up to +72%)">✦ <strong id="hud-fluency">×1.00</strong></span>
       </div>
       <div class="hud-right">
         <button class="btn icon small" id="btn-mute-hud" aria-label="Toggle sound">🔊</button>
@@ -1220,6 +1263,7 @@ function gfHaptic(ms){
     if(typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms||10); }
   catch(e){}
 }
+let _gfPrevSpell = [null, null, null];  // tracks slot fills for the fill anim
 
 /* ----- 1. RUNE DEFINITIONS -----
    Properties:
@@ -2440,26 +2484,31 @@ function renderGame(){
   if(dEl){
     const sg = sigilOf(run);
     const chips = [];
-    chips.push(`<span class="dchip">◈ <b>${sg.name}</b></span>`);
+    chips.push(`<span class="dchip" data-tip="${sg.desc||'Your run identity — blesses and forbids.'}">◈ <b>${sg.name}</b></span>`);
     if(run.champion && CHAMPIONS[run.champion.id]){
-      chips.push(`<span class="dchip" title="${CHAMPIONS[run.champion.id].desc}">★ ${CHAMPIONS[run.champion.id].name} <b>Lv${run.champion.level||1}</b></span>`);
+      chips.push(`<span class="dchip" data-tip="${CHAMPIONS[run.champion.id].desc}">★ ${CHAMPIONS[run.champion.id].name} <b>Lv${run.champion.level||1}</b></span>`);
     }
-    const rel = (run.relics||[]).map(id=>(RELICS.find(x=>x.id===id)||{}).name).filter(Boolean);
-    chips.push(`<span class="dchip${rel.length?'':' dim'}" title="${rel.join(' · ')||'no relics yet'}">⬡ relics <b>${rel.length}</b></span>`);
+    const relObjs = (run.relics||[]).map(id=>RELICS.find(x=>x.id===id)).filter(Boolean);
+    const pips = relObjs.map(r=>`<i class="rtok r-${r.rarity}"></i>`).join('');
+    const relTip = relObjs.length ? relObjs.map(r=>`${r.name} — ${r.desc}`).join(' · ') : 'No relics bound yet.';
+    chips.push(`<span class="dchip${relObjs.length?'':' dim'}" data-tip="${relTip}">⬡ relics <b>${relObjs.length}</b>${pips}</span>`);
     const pr = run.progression && run.progression.prophecy;
     if(pr){
-      chips.push(`<span class="dchip dprophecy ${pr.done?'done':''}" title="Fulfil the named fusion '${pr.name}' for +12 HP">✦ ${pr.done?'prophecy ✓':'prophecy: '+pr.name}</span>`);
+      chips.push(`<span class="dchip dprophecy ${pr.done?'done':''}" data-tip="Fulfil the named fusion '${pr.name}' for +12 HP">✦ ${pr.done?'prophecy ✓':'prophecy: '+pr.name}</span>`);
     }
     const bound = (run.boundElements||[]);
-    if(bound.length) chips.push(`<span class="dchip dim" title="Elements bound this run unlock their deeper runes">⛓ ${bound.join(' ')}</span>`);
-    if(sg.forbid && sg.forbid.length) chips.push(`<span class="dchip dim" title="Sealed by your Sigil — these runes deal 0">⊘ ${sg.forbid.join(' ')}</span>`);
+    if(bound.length) chips.push(`<span class="dchip dim" data-tip="Elements bound this run unlock their deeper runes">⛓ ${bound.join(' ')}</span>`);
+    if(sg.forbid && sg.forbid.length) chips.push(`<span class="dchip dim" data-tip="Sealed by your Sigil — these runes deal 0">⊘ ${sg.forbid.join(' ')}</span>`);
     dEl.innerHTML = chips.join('');
   }
 
   // Enemy
   document.getElementById('enemy-name').textContent = enemy.name;
   document.getElementById('enemy-hp-text').textContent = `${run.enemyHp}/${run.enemyMaxHp}`;
-  document.getElementById('enemy-hp-fill').style.width = (100 * run.enemyHp / run.enemyMaxHp) + '%';
+  const hpPct = (100 * run.enemyHp / run.enemyMaxHp) + '%';
+  document.getElementById('enemy-hp-fill').style.width = hpPct;
+  const _ghost = document.getElementById('enemy-hp-ghost');
+  if(_ghost) _ghost.style.width = hpPct;
   const portrait = document.getElementById('enemy-portrait');
   portrait.setAttribute('data-art-slot', `enemy-${enemy.id}`);
   portrait.setAttribute('data-glyph', enemy.glyph);
@@ -2477,7 +2526,8 @@ function renderGame(){
   slotsEl.innerHTML = '';
   run.spell.forEach((id, i)=>{
     const slot = document.createElement('div');
-    slot.className = 'spell-slot' + (id ? ' filled' : '');
+    const justFilled = id && _gfPrevSpell[i] !== id;
+    slot.className = 'spell-slot' + (id ? ' filled' : '') + (justFilled ? ' gf-fill' : '');
     slot.dataset.slot = i;
     if(id){
       const rune = RUNES.find(r=>r.id===id);
@@ -2488,6 +2538,7 @@ function renderGame(){
     slot.onclick = ()=> handleSlotTap(i);
     slotsEl.appendChild(slot);
   });
+  _gfPrevSpell = run.spell.slice();
 
   // Synergy hints on slots
   const present = run.spell.filter(Boolean).map(id => RUNES.find(r=>r.id===id));
@@ -2855,6 +2906,49 @@ function toggleMute(){ GFAudio.toggleMute(); if(!GFAudio.isMuted()) GFAudio.tap(
 document.getElementById('btn-mute').onclick = toggleMute;
 document.getElementById('btn-mute-hud').onclick = toggleMute;
 updateMuteUI();
+
+/* Tap-tooltips: title= never fires on touch, so depth chips / stats with
+   [data-tip] were invisible on phones (a real bug). Tap a chip to toggle its
+   explanation; tap anywhere else to dismiss. Guarded so the Node test/sim
+   stubs (no document.addEventListener) skip it entirely. */
+if(typeof document !== 'undefined' && typeof document.addEventListener === 'function'){
+  const tip = document.createElement('div');
+  tip.id = 'gf-tip';
+  document.body.appendChild(tip);
+  let tipFor = null;
+  function hideTip(){
+    tip.classList.remove('show');
+    if(tipFor){ tipFor.classList.remove('gf-tip-open'); tipFor = null; }
+  }
+  function showTip(el){
+    const text = el.getAttribute('data-tip');
+    if(!text){ hideTip(); return; }
+    if(tipFor) tipFor.classList.remove('gf-tip-open');
+    tip.textContent = text;
+    tip.classList.add('show');
+    el.classList.add('gf-tip-open');
+    tipFor = el;
+    const r = el.getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = r.left + r.width/2 - tw/2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    let top = r.bottom + 8;
+    if(top + th > window.innerHeight - 8) top = r.top - th - 8;
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(8, top) + 'px';
+  }
+  document.addEventListener('click', (e)=>{
+    const el = e.target && e.target.closest && e.target.closest('[data-tip]');
+    if(el){
+      if(tipFor === el){ hideTip(); }
+      else { showTip(el); }
+    } else {
+      hideTip();
+    }
+  }, true);
+  window.addEventListener('scroll', hideTip, true);
+  window.addEventListener('resize', hideTip);
+}
 document.getElementById('btn-codex').onclick = ()=>showScreen('codex-screen');
 document.getElementById('btn-codex-back').onclick = ()=>showScreen('title-screen');
 document.getElementById('btn-back-title').onclick = ()=>showScreen('title-screen');
