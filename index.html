@@ -1144,6 +1144,7 @@
         <span class="hud-stat fluency-stat" id="hud-fluency-wrap" data-tip="Fluency — each defeated enemy boosts spell damage by +6% (up to +72%)">✦ <strong id="hud-fluency">×1.00</strong></span>
       </div>
       <div class="hud-right">
+        <button class="btn icon small" id="btn-guide" aria-label="Field guide — your named fusions">✦</button>
         <button class="btn icon small" id="btn-mute-hud" aria-label="Toggle sound">🔊</button>
         <button class="btn icon small" id="btn-flee">⌫</button>
       </div>
@@ -2936,6 +2937,64 @@ function hideModal(){
   document.getElementById('modal-bg').classList.remove('active');
 }
 
+/* In-run field guide — what you KNOW (named fusions) plus which of them your
+   hand can make RIGHT NOW (hand brute-forced through findComboName, ≤3 = the
+   slot cap). Read-only overlay; never reveals undiscovered combos — the
+   discovery pillar stays intact. Pairs with the b11 coach. */
+function showRunGuide(){
+  const run = state.run;
+  const known = state.meta.discoveredCombos || {};
+  const knownIds = Object.keys(known);
+  const readyNow = {};  // comboId -> [glyph,…] of the hand runes that hit it
+  if(run && run.hand && run.hand.length){
+    const hand = run.hand.map(id=>RUNES.find(r=>r.id===id)).filter(Boolean);
+    const n = hand.length;
+    const test = (idxs)=>{
+      const c = findComboName(idxs.map(i=>hand[i]));
+      if(c && known[c.id] && !readyNow[c.id]) readyNow[c.id] = idxs.map(i=>hand[i].glyph);
+    };
+    for(let i=0;i<n;i++){ test([i]);
+      for(let j=0;j<n;j++){ if(j===i) continue; test([i,j]);
+        for(let k=0;k<n;k++){ if(k===i||k===j) continue; test([i,j,k]); } } }
+  }
+  const readyIds = Object.keys(readyNow);
+  const glyphsOf = ids => ids.map(rid=>{ const r=RUNES.find(x=>x.id===rid); return r?r.glyph:'·'; }).join(' ');
+  const lbl = t => `<div style="text-align:left;font-family:'JetBrains Mono',monospace;font-size:11px;color:#c7a155;text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px;">${t}</div>`;
+
+  let html = `<h2 style="margin-bottom:4px;">✦ Field Guide</h2>
+    <p style="color:var(--parchment-sh);font-size:12px;margin:0 0 12px;">What you've named — and what this hand can make right now.</p>`;
+
+  html += lbl('Ready from your hand');
+  if(readyIds.length){
+    html += `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">` +
+      readyIds.map(id=>`<div class="codex-combo"><div><div class="name">${known[id].name}</div><div class="glyphs">${readyNow[id].join(' ')}</div></div><div class="peak">▲</div></div>`).join('') +
+      `</div>`;
+  } else {
+    html += `<p style="color:var(--parchment-sh);font-size:12px;margin:0 0 14px;font-style:italic;">Nothing you've named is buildable from this hand. Try stacking 3 of one element — or 3 of one shape — to find a new fusion.</p>`;
+  }
+
+  html += lbl(`Fusions you've named · ${knownIds.length}/${NAMED_COMBOS.length}`);
+  if(knownIds.length){
+    const sorted = knownIds.slice().sort((a,b)=> (readyNow[b]?1:0)-(readyNow[a]?1:0) || (known[b].peakDamage||0)-(known[a].peakDamage||0));
+    html += `<div style="display:flex;flex-direction:column;gap:6px;">` +
+      sorted.map(id=>{
+        const c = known[id], rdy = !!readyNow[id];
+        return `<div class="codex-combo"${rdy?' style="box-shadow:inset 0 0 0 1px rgba(199,161,85,.55);"':''}><div><div class="name">${c.name}${rdy?' · ready':''}</div><div class="glyphs">${glyphsOf(c.runeIds||[])}</div></div><div class="peak">${c.peakDamage||0}</div></div>`;
+      }).join('') +
+      `</div>`;
+  } else {
+    html += `<p style="color:var(--parchment-sh);font-size:12px;margin:0;font-style:italic;">You haven't named a fusion yet. Fuse 3 runes that share an element or a shape — the codex remembers what you discover, forever.</p>`;
+  }
+
+  const m = document.getElementById('modal-content');
+  m.innerHTML = `<div style="max-height:60vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:2px;">${html}</div><div class="choices" id="guide-choices"></div>`;
+  const b = document.createElement('button');
+  b.className = 'btn primary'; b.textContent = 'Close';
+  b.onclick = hideModal;
+  m.querySelector('#guide-choices').appendChild(b);
+  document.getElementById('modal-bg').classList.add('active');
+}
+
 /* Phase 4: choose your Sigil (run identity) before a fresh run */
 function showIntro(){
   const m = document.getElementById('modal-content');
@@ -3101,7 +3160,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b12 bottombar-fix';
+const GF_BUILD = '2026-05-19 · b13 field-guide';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
@@ -3249,6 +3308,7 @@ if(GF_LINKS.itch){
 }
 document.getElementById('btn-cast').onclick = cast;
 document.getElementById('btn-clear').onclick = clearSpell;
+document.getElementById('btn-guide').onclick = showRunGuide;
 document.getElementById('btn-flee').onclick = ()=>{
   if(confirm('Abandon this inscription? Progress will be lost.')){
     state.run = null;
