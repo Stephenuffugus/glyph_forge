@@ -1817,6 +1817,22 @@ function hashString(s){
   return h;
 }
 
+/* ----- 4b. ASCENSION — the meta-progression difficulty ladder -----
+   Tier 0 is the sim-validated base game (byte-identical: every modifier is
+   neutral). Each tier stacks one more constraint. Beating a tier (13/13)
+   unlocks the next — the "one more run" engine. Modifiers are applied ONLY
+   at run construction / beginEncounter (never in resolveSpell), so the
+   balance sim — which always builds tier-0 runs — is untouched. */
+const ASCENSIONS = [
+  { t:0, name:'Inscription',          blurb:'The codex as written.',                bossHp:1.00, enemyHp:1.00, threat:0, heal:8, hp:0 },
+  { t:1, name:'Deeper Inscription I', blurb:'The Sovereign endures longer (+20% HP).', bossHp:1.20, enemyHp:1.00, threat:0, heal:8, hp:0 },
+  { t:2, name:'Deeper Inscription II',blurb:'Every foe strikes harder (+1 threat).',  bossHp:1.20, enemyHp:1.00, threat:1, heal:8, hp:0 },
+  { t:3, name:'Deeper Inscription III',blurb:'The ink replenishes less (heal 8→5).',  bossHp:1.20, enemyHp:1.00, threat:1, heal:5, hp:0 },
+  { t:4, name:'Deeper Inscription IV',blurb:'All foes harden (+10% HP) & the Sovereign swells (+44%).', bossHp:1.44, enemyHp:1.10, threat:1, heal:5, hp:0 },
+  { t:5, name:'The Unwritten',        blurb:'You begin frailer (−6 max HP).',         bossHp:1.44, enemyHp:1.10, threat:1, heal:5, hp:-6 },
+];
+function ascById(t){ return ASCENSIONS[Math.max(0, Math.min(ASCENSIONS.length-1, t|0))] || ASCENSIONS[0]; }
+
 /* ----- 5. STATE ----- */
 const SAVE_KEY = 'glyph-forge-v1';
 let state = loadState();
@@ -1831,6 +1847,12 @@ function defaultState(){
       runsAttempted: 0,
       bestRun: 0,
       seenIntro: false,
+      // ---- meta-progression (additive; old saves merge-default in) ----
+      ascension: 0,            // highest UNLOCKED Ascension tier
+      ascensionBeaten: 0,      // highest tier cleared 13/13
+      sigilWins: {},           // sigilId -> 13/13 win count
+      daily: { lastDate:null, streak:0, bestStreak:0, scores:{} },
+      mastery: { seals:[] },   // earned milestone seal ids
     },
     run: null,
   };
@@ -1848,8 +1870,9 @@ function saveState(){
 }
 
 /* ----- 6. RUN INIT ----- */
-function startNewRun(seedStr, sigilId){
+function startNewRun(seedStr, sigilId, asc){
   const sg = SIGILS.find(s=>s.id===sigilId) || SIGILS[0];
+  const A = ascById(asc || 0);
   const seed = hashString(seedStr || (Date.now() + ':' + Math.random()));
   const rng = mulberry32(seed);
 
@@ -1881,8 +1904,13 @@ function startNewRun(seedStr, sigilId){
     seed: seedStr || String(seed),
     rngSeed: seed,
     encounterIdx: 0,
-    hp: sg.maxHp || 50,
-    maxHp: sg.maxHp || 50,
+    hp: Math.max(1, (sg.maxHp || 50) + A.hp),
+    maxHp: Math.max(1, (sg.maxHp || 50) + A.hp),
+    asc: A.t,
+    healAmt: A.heal,
+    threatBonus: A.threat,
+    bossHpMult: A.bossHp,
+    enemyHpMult: A.enemyHp,
     deck: starterDeck.slice(),
     hand: [],
     discard: [],
@@ -1915,15 +1943,18 @@ function beginEncounter(){
   const enemy = ENEMIES.find(e=>e.id===node.enemyId);
   // scale boss / late enemies slightly with progression
   const scale = 1 + (run.encounterIdx * 0.05);
-  run.enemyHp = Math.floor(enemy.hp * scale);
+  // Ascension: boss/enemy HP mult + threat bonus (default-neutral at tier 0,
+  // and for any pre-Ascension saved run resumed mid-flight).
+  const hpMult = enemy.boss ? (run.bossHpMult || 1) : (run.enemyHpMult || 1);
+  run.enemyHp = Math.floor(enemy.hp * scale * hpMult);
   run.enemyMaxHp = run.enemyHp;
-  run.currentThreat = enemy.threat;
+  run.currentThreat = enemy.threat + (run.threatBonus || 0);
   run.spell = [null, null, null];
   run.burns = 0;
   run.stunNext = false;
-  // restore 8 HP between encounters (the ink replenishes)
+  // restore HP between encounters (the ink replenishes; less at high Ascension)
   if(run.encounterIdx > 0){
-    run.hp = Math.min(run.maxHp, run.hp + 8);
+    run.hp = Math.min(run.maxHp, run.hp + (run.healAmt == null ? 8 : run.healAmt));
   }
   // refill hand to 5
   while(run.hand.length < 5 && (run.deck.length > 0 || run.discard.length > 0)){
@@ -2186,8 +2217,9 @@ function enemyTurn(stunned){
     return;
   }
   const enemy = ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId);
-  // simple attack: deal threat damage (+2 if the glass-cannon relic is bound)
-  let dmg = enemy.threat;
+  // simple attack: deal threat damage (Ascension may add +threat; +2 if the
+  // glass-cannon relic is bound)
+  let dmg = run.currentThreat || enemy.threat;
   if(run.relics && run.relics.includes('final-page')) dmg += 2;
   run.hp = Math.max(0, run.hp - dmg);
   saveState();
@@ -2224,14 +2256,31 @@ function onDefeat(){
 
 function onVictory(){
   GFAudio.victory();
-  window._gfResult = { seed: state.run && state.run.seed, reached: 13, won: true };
+  const run = state.run || {};
+  const asc = run.asc || 0;
+  const isDaily = /^daily-/.test(run.seed || '');
+  window._gfResult = { seed: run.seed, reached: 13, won: true, asc };
   state.meta.runsCompleted += 1;
   state.meta.bestRun = Math.max(state.meta.bestRun, 13);
+  if(run.sigil) state.meta.sigilWins[run.sigil] = (state.meta.sigilWins[run.sigil] || 0) + 1;
+  // Ascension unlock: clearing the highest tier you've reached opens the next.
+  // Daily runs are fixed at tier 0 (fair shared seed) and never advance it.
+  if(!isDaily){
+    state.meta.ascensionBeaten = Math.max(state.meta.ascensionBeaten || 0, asc);
+    if(asc >= (state.meta.ascension || 0) && asc + 1 < ASCENSIONS.length){
+      state.meta.ascension = asc + 1;
+    }
+  }
+  const newTierUnlocked = !isDaily && asc + 1 < ASCENSIONS.length && (state.meta.ascension === asc + 1);
   state.run = null;
   saveState();
+  const ascLine = asc > 0 ? ` <span style="color:var(--crimson)">[${ascById(asc).name}]</span>` : '';
+  const unlockLine = newTierUnlocked
+    ? `<br><b style="color:var(--gilt-bright)">✦ Unlocked: ${ascById(asc+1).name}</b> — ${ascById(asc+1).blurb}`
+    : (isDaily ? '<br><span style="color:var(--parchment-sh)">Daily Sigil — fixed depth, fair for all.</span>' : '');
   showModal({
     title: 'The Sovereign Falls',
-    body: 'You have inscribed every glyph. The codex is whole.',
+    body: `You have inscribed every glyph. The codex is whole.${ascLine}${unlockLine}`,
     icon: '✷',
     choices: [
       { label: 'Share victory', onClick: gfShare },
