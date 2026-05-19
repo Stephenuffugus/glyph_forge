@@ -147,6 +147,21 @@
     padding: 4px 8px; cursor: help;
   }
   .tm-chip b { color: var(--gilt-bright); font-weight: 700; }
+  .mastery-track {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px;
+  }
+  .mseal {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.04em; padding: 5px 9px; border-radius: 3px;
+    border: 1px solid rgba(212,168,73,0.18); color: var(--parchment-sh);
+    cursor: help; opacity: 0.55;
+  }
+  .mseal.got {
+    opacity: 1; color: var(--gilt-bright);
+    border-color: var(--gilt);
+    background: rgba(212,168,73,0.08);
+    box-shadow: 0 0 10px rgba(212,168,73,0.15);
+  }
   /* Ascension picker (Sigil modal) */
   .asc-picker {
     display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -1167,6 +1182,8 @@
       <button class="btn icon" id="btn-codex-back">✕</button>
     </div>
     <div class="codex-stats" id="codex-stats"></div>
+    <div class="codex-section-title">Mastery <span id="codex-mastery-count"></span></div>
+    <div class="mastery-track" id="codex-mastery"></div>
     <div class="codex-section-title">Discovered Fusions</div>
     <div id="codex-combos"></div>
     <div class="codex-section-title">Bound Glyphs</div>
@@ -1866,6 +1883,34 @@ const ASCENSIONS = [
   { t:5, name:'The Unwritten',        blurb:'You begin frailer (−6 max HP).',         bossHp:1.44, enemyHp:1.10, threat:1, heal:5, hp:-6 },
 ];
 function ascById(t){ return ASCENSIONS[Math.max(0, Math.min(ASCENSIONS.length-1, t|0))] || ASCENSIONS[0]; }
+
+/* Codex Mastery — long-arc goals derived purely from existing meta (no power
+   granted → balance/sim untouched). The "collection ladder" that gives the
+   codex a reason to exist beyond a log. */
+const MASTERY = [
+  { id:'first',     name:'First Fusion',   tip:'Name your first fusion.',
+    done:m=>Object.keys(m.discoveredCombos||{}).length >= 1 },
+  { id:'adept',     name:'Adept',          tip:'Name 12 fusions.',
+    done:m=>Object.keys(m.discoveredCombos||{}).length >= 12 },
+  { id:'scholar',   name:'Scholar',        tip:'Name 24 fusions.',
+    done:m=>Object.keys(m.discoveredCombos||{}).length >= 24 },
+  { id:'archivist', name:'Archivist',      tip:'Name every fusion in the codex.',
+    done:m=>Object.keys(m.discoveredCombos||{}).length >= NAMED_COMBOS.length },
+  { id:'glyphwright',name:'Glyphwright',   tip:'Bind every glyph.',
+    done:m=>(m.discoveredRunes||[]).length >= RUNES.length },
+  { id:'sealed',    name:'Codex Sealed',   tip:'Win a full 13/13 run.',
+    done:m=>(m.runsCompleted||0) >= 1 },
+  { id:'veteran',   name:'Veteran',        tip:'Seal 10 codices (10 wins).',
+    done:m=>(m.runsCompleted||0) >= 10 },
+  { id:'pantheon',  name:'Pantheon',       tip:'Win with all 7 Sigils.',
+    done:m=>Object.keys(m.sigilWins||{}).length >= 7 },
+  { id:'ascendant', name:'Ascendant',      tip:'Clear Ascension 1.',
+    done:m=>(m.ascensionBeaten||0) >= 1 },
+  { id:'deeper',    name:'Deep Ascendant', tip:'Clear Ascension 3.',
+    done:m=>(m.ascensionBeaten||0) >= 3 },
+  { id:'unwritten', name:'The Unwritten',  tip:'Clear the final Ascension.',
+    done:m=>(m.ascensionBeaten||0) >= ASCENSIONS.length-1 },
+];
 
 /* ----- 5. STATE ----- */
 const SAVE_KEY = 'glyph-forge-v1';
@@ -2751,6 +2796,21 @@ function renderCodex(){
     <div class="codex-stat"><div class="value">${Object.keys(state.meta.discoveredCombos).length}/${NAMED_COMBOS.length}</div><div class="label">fusions named</div></div>
     <div class="codex-stat"><div class="value">${state.meta.runsCompleted}</div><div class="label">codices sealed</div></div>
   `;
+  // Mastery track
+  const m = state.meta;
+  const earned = MASTERY.filter(s=>{ try { return s.done(m); } catch(e){ return false; } });
+  m.mastery = m.mastery || { seals:[] };
+  const earnedIds = earned.map(s=>s.id);
+  if(earnedIds.join(',') !== (m.mastery.seals||[]).join(',')){ m.mastery.seals = earnedIds; saveState(); }
+  const mcEl = document.getElementById('codex-mastery-count');
+  if(mcEl) mcEl.textContent = `${earned.length}/${MASTERY.length}`;
+  const mtEl = document.getElementById('codex-mastery');
+  if(mtEl){
+    mtEl.innerHTML = MASTERY.map(s=>{
+      const got = earnedIds.includes(s.id);
+      return `<span class="mseal${got?' got':''}" data-tip="${s.tip}${got?' ✓ earned':''}">${got?'◆':'◇'} ${s.name}</span>`;
+    }).join('');
+  }
   // combos
   const cEl = document.getElementById('codex-combos');
   cEl.innerHTML = '';
