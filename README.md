@@ -67,7 +67,9 @@ Either path works.
 
 If there's time after art import:
 
-- **Add SFX**: a single MP3 of "ink scratching paper" for spell cast, "page turn" for reward, "chime" for combo discovery. ~3 seconds each. The game has no audio hooks yet — add `<audio>` tags and trigger from cast() / showRewardModal() / showComboBanner().
+- ~~Add SFX~~ ✅ **done** — `GFAudio`, a zero-dependency Web Audio synth, is
+  wired to cast/combo/reward/hit/victory/defeat/tap with a persisted mute
+  button. No asset files; Node-safe (inert in test/sim).
 - **Add Firebase** for daily leaderboard. Stephen already uses Firebase on Focus Grove — same stack works here. Hook into the existing `state.run.seed` and POST results on victory.
 - **Animation polish**: the combo banner could pull in a parchment background swatch instead of a flat color. Adds atmosphere.
 
@@ -134,10 +136,10 @@ In `startNewRun()` look for the `path.push` loop. Currently fixed 13 encounters 
 
 ## Known issues / future work
 
-- No sound yet (intentional MVP cut).
+- ✅ Sound shipped — synthesised Web Audio (no asset files), with a mute toggle.
+- ✅ Relics shipped — 22 relics + 5 hidden transmutations; sim-balanced.
 - Boss has no special mechanics — just high HP / high threat. A phase-2 mechanic would lift the climax.
 - No deck management between encounters (can't remove runes). Could add as a rare reward.
-- No relics / passive items. Could become a meta-progression hook.
 - Daily Sigil works mechanically but no leaderboard yet. Hook into Firebase.
 
 ---

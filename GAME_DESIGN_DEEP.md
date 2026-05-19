@@ -214,3 +214,32 @@ Monster Train Multistrike/Champion, Library of Ruina Key Pages, Hades Duo/Codex,
 Neon Abyss skill pages, MTG color pie/ability-words/lenticular design, Cobalt
 Core, Shogun Showdown, Inscryption, Astrea, Backpack Hero, IGF/TGA/BAFTA/GDCA
 2022–2025 winners). Retained in the session research record.
+
+---
+
+## Final shipped state (stamp — 2026-05-19)
+
+All 6 pillars shipped and sim-validated, then a content pack landed and was
+balance-tuned to a clean verdict:
+
+- **Content:** 36 runes · 48 named fusions · 7 Sigils (bless+forbid) ·
+  6 Champions (level mid-run) · 22 relics · 5 hidden transmutations.
+- **Balance:** `node sim-run.js` → *"depth systems balanced; determinism
+  holds."* All 7 Sigils inside the healthy band (overall 56% optimal-AI);
+  every relic Δ **+5..+25**, none dead/overpowered. The 5 content-pack hot
+  relics (+31..+35, one at 100%) and the dead Low Lantern (−7.3) were
+  sim-flagged and re-costed (fractional XMULT exponents + globalMult tax;
+  Low Lantern reworked into a lean-cast archetype). Numbers in `BALANCE.md`.
+- **Feel:** synthesised Web Audio (`GFAudio`, no asset files, mute toggle,
+  Node-safe) + a juice pass — damage-pop magnitude tiers & count-up, XMULT
+  screen flash/shake, chip-damage HP bar, synergy throb, modal entrance,
+  tap-tooltips (fixed a real touch bug: `title=` never fires on mobile),
+  full `prefers-reduced-motion` support, 44px tap targets.
+- **Ship:** one `index.html`, single `<script>`, PWA, offline, deterministic
+  Daily Sigil. Static-host deployable (`tools/pack.sh` → Hostinger/any host)
+  or GitHub Pages. Saves additive-only (`glyph-forge-v1` unbroken throughout).
+
+Design debt remaining (non-blocking, see `LAUNCH.md` backlog): Sovereign is
+tanky not tricky (phase-2 wanted); post-pack Sigil spread is 37%↔67%
+optimal-AI (inside the sim's pass band, future tightening possible); no
+deck-thinning; art ships in post-launch batches (hot-loads, graceful fallback).
