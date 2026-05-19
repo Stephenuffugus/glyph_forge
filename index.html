@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0d0a08" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -706,11 +706,12 @@
     display: flex; gap: 8px;
     flex-shrink: 0;
     padding: 8px 16px 12px;
-    /* viewport-fit=cover is REQUIRED for env(safe-area-inset-*) to be
-       non-zero. With it set, this lifts the cast buttons clear of the
-       Android gesture/back bar + iOS home indicator. The 28px floor is
-       a hard guarantee for browsers that report the inset as 0. */
-    padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px));
+    /* NO viewport-fit=cover (Chrome Android then sizes the page ABOVE the
+       3-button nav bar instead of under it). Android Chrome does not report
+       env(safe-area-inset-bottom) for the nav bar, so we can't depend on it
+       — a hard 56px floor reliably clears a 3-button bar (~48px) with margin;
+       the safe-area term still helps iOS / installed-PWA where it's set. */
+    padding-bottom: max(56px, calc(env(safe-area-inset-bottom) + 20px));
     background: var(--ink-deep);
     border-top: 1px solid rgba(212,168,73,0.15);
   }
@@ -3160,7 +3161,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b13 field-guide';
+const GF_BUILD = '2026-05-19 · b14 navbar-clear';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
