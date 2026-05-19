@@ -2274,10 +2274,14 @@ function onEnemyDefeated(){
 
 function onDefeat(){
   GFAudio.defeat();
-  window._gfResult = { seed: state.run && state.run.seed, reached: state.run ? state.run.encounterIdx + 1 : 1, won: false };
+  const seed = state.run && state.run.seed;
+  const reached = state.run ? state.run.encounterIdx + 1 : 1;
+  window._gfResult = { seed, reached, won: false };
+  const dd = recordDailyResult(seed, reached, false);
+  const dailyLine = dd ? `<br><span style="color:var(--gilt)">Daily score ${dailyScore(reached,false)} · ${dd.streak}-day streak 🔥</span>` : '';
   showModal({
     title: 'The Ink Runs Dry',
-    body: `You reached encounter ${state.run.encounterIdx + 1} of 13.`,
+    body: `You reached encounter ${reached} of 13.${dailyLine}`,
     icon: '✗',
     iconDefeat: true,
     choices: [
@@ -2306,12 +2310,14 @@ function onVictory(){
     }
   }
   const newTierUnlocked = !isDaily && asc + 1 < ASCENSIONS.length && (state.meta.ascension === asc + 1);
+  const dd = recordDailyResult(run.seed, 13, true);
   state.run = null;
   saveState();
   const ascLine = asc > 0 ? ` <span style="color:var(--crimson)">[${ascById(asc).name}]</span>` : '';
   const unlockLine = newTierUnlocked
     ? `<br><b style="color:var(--gilt-bright)">✦ Unlocked: ${ascById(asc+1).name}</b> — ${ascById(asc+1).blurb}`
-    : (isDaily ? '<br><span style="color:var(--parchment-sh)">Daily Sigil — fixed depth, fair for all.</span>' : '');
+    : (dd ? `<br><span style="color:var(--gilt)">Daily score ${dailyScore(13,true)} · ${dd.streak}-day streak 🔥</span>`
+          : '');
   showModal({
     title: 'The Sovereign Falls',
     body: `You have inscribed every glyph. The codex is whole.${ascLine}${unlockLine}`,
@@ -2978,13 +2984,38 @@ function showComboBanner(name, isNew, big){
 const GF_LINKS = {
   itch: ''   // e.g. 'https://stephen.itch.io/glyph-forge'
 };
+/* Daily streak/score — the retention heartbeat. Records the FIRST result for
+   a given Daily date (one attempt, in the spirit of the mode); a consecutive
+   calendar day extends the streak, a gap resets it. Deterministic; no RNG. */
+function dailyScore(reached, won){ return reached*100 + (won?1500:0); }
+function recordDailyResult(seed, reached, won){
+  if(!seed || !/^daily-/.test(seed)) return null;
+  const date = seed.replace('daily-','');
+  const d = state.meta.daily || (state.meta.daily = { lastDate:null, streak:0, bestStreak:0, scores:{} });
+  if(d.scores && d.scores[date]) return d;          // one attempt — already logged
+  const score = dailyScore(reached, won);
+  d.scores = d.scores || {};
+  d.scores[date] = { reached, won, score };
+  if(d.lastDate){
+    const gap = (Date.parse(date) - Date.parse(d.lastDate)) / 86400000;
+    d.streak = (gap === 1) ? (d.streak||0) + 1 : 1;
+  } else {
+    d.streak = 1;
+  }
+  d.bestStreak = Math.max(d.bestStreak||0, d.streak);
+  d.lastDate = date;
+  saveState();
+  return d;
+}
 function gfShareText(){
   const res = window._gfResult || {};
   const daily = res.seed && /^daily-/.test(res.seed);
   const tag = daily ? ('Daily Sigil ' + res.seed.replace('daily-','')) : 'a run';
   const line = res.won ? 'inscribed the whole codex — 13/13 ✷'
                        : ('fell at encounter ' + (res.reached || 1) + '/13');
-  return `Glyph Forge — ${tag}\nI ${line}.\nFuse runes. Find what shouldn't work.\n${location.origin}${location.pathname}`;
+  const d = state.meta.daily || {};
+  const extra = daily ? `\nScore ${dailyScore(res.reached||1, !!res.won)}${d.streak?` · ${d.streak}-day streak 🔥`:''}` : '';
+  return `Glyph Forge — ${tag}\nI ${line}.${extra}\nFuse runes. Find what shouldn't work.\n${location.origin}${location.pathname}`;
 }
 async function gfShare(){
   const text = gfShareText();
