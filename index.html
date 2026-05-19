@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta name="theme-color" content="#0d0a08" />
+<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Glyph Forge</title>
@@ -3161,7 +3162,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b14 navbar-clear';
+const GF_BUILD = '2026-05-19 · b15 fullscreen';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,
@@ -3310,6 +3311,20 @@ if(GF_LINKS.itch){
 document.getElementById('btn-cast').onclick = cast;
 document.getElementById('btn-clear').onclick = clearSpell;
 document.getElementById('btn-guide').onclick = showRunGuide;
+
+/* Tap-to-fullscreen. Android Chrome hides the system nav + URL bars while a
+   page is fullscreen, but it must be requested from a user gesture — so fire
+   on the first interaction (and re-arm if they later exit, so a tap restores
+   it). Silently no-ops where unsupported (iOS tab — there the home-screen
+   install gives true fullscreen, manifest is already display:fullscreen). */
+function gfGoFullscreen(){
+  if(document.fullscreenElement || document.webkitFullscreenElement) return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if(!req) return;
+  try { const p = req.call(el); if(p && p.catch) p.catch(()=>{}); } catch(e){}
+}
+window.addEventListener('pointerdown', gfGoFullscreen);
 document.getElementById('btn-flee').onclick = ()=>{
   if(confirm('Abandon this inscription? Progress will be lost.')){
     state.run = null;
