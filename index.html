@@ -553,7 +553,8 @@
     border-bottom: 1px solid rgba(212,168,73,0.15);
   }
   .spell-readout {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 4px 10px;
     margin-bottom: 8px;
     font-family: 'IM Fell English', serif;
     color: var(--parchment-dk);
@@ -561,6 +562,16 @@
     letter-spacing: 0.08em;
     font-style: italic;
   }
+  /* Batch D: the live POWER → XMULT → fluency breakdown (legibility) */
+  #spell-formula { flex: 1 1 0; min-width: 0; line-height: 1.55; font-style: normal; }
+  #spell-formula .fb-pow    { color: #8ab4e8; }
+  #spell-formula .fb-xm     { color: var(--gilt-bright); font-weight: 700; }
+  #spell-formula .fb-rs     { color: var(--parchment-sh); margin-left: 3px; }
+  #spell-formula .fb-fl     { color: #c79b6a; }
+  #spell-formula .fb-armor  { color: #c79b6a; }
+  #spell-formula .fb-pierce { color: #7fd4a0; }
+  #spell-formula .fb-op     { color: #6b5a3e; margin: 0 4px; }
+  .spell-damage { flex: 0 0 auto; }
   .spell-damage {
     font-family: 'Cinzel Decorative', serif;
     font-weight: 700;
@@ -1254,7 +1265,7 @@
     <div class="spell-area">
       <div class="spell-readout">
         <span id="spell-formula" style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">—</span>
-        <span class="spell-damage" id="spell-damage">0</span>
+        <span class="spell-damage" id="spell-damage" data-tip="Damage = POWER × XMULT × fluency. XMULT is a MULTIPLIER that compounds when your runes share an element or a shape (3-of-a-kind multiplies hard) — that's where the big numbers come from. Tap a rune to read it.">0</span>
       </div>
       <div class="spell-slots" id="spell-slots">
         <div class="spell-slot" data-slot="0">I</div>
@@ -2449,7 +2460,10 @@ function cast(){
 
   // apply damage to enemy (Batch C1: minus armor, unless the spell pierces)
   const netDmg = netEnemyDamage(run, result.damage, result);
+  const ehpBefore = run.enemyHp;
   run.enemyHp = Math.max(0, run.enemyHp - netDmg);
+  // Batch D: overkill flourish — a spell that buries the foe with room to spare
+  const overkill = netDmg >= ehpBefore * 2 && ehpBefore >= 12;
 
   // healing
   if(result.healing > 0){
@@ -2496,6 +2510,12 @@ function cast(){
   if(_enemyArmor > 0){
     if(result.trueDamage || result.ignoreWard) gfFloatNote('⛊ pierced!', '#7fd4a0');
     else if(result.damage > netDmg) gfFloatNote(`⛊ −${result.damage - netDmg} armor`, '#c79b6a');
+  }
+  // Batch D: ASCENDED — a wide-overkill blow earns a flame celebration
+  if(overkill){
+    showComboBanner('✦ ASCENDED ✦', true, true);
+    const fl = document.getElementById('gf-screen-flash');
+    if(fl && !gfReducedMotion()){ fl.classList.remove('fire'); void fl.offsetWidth; fl.classList.add('fire'); }
   }
 
   // enemy reaction
@@ -2940,13 +2960,17 @@ function renderGame(){
     });
   }
 
-  // Spell readout
-  const dmg = previewSpellDamage();
+  // Spell readout (Batch D: show the ACTUAL post-armor number AND the live
+  // POWER → XMULT → fluency breakdown so the player can SEE why a number is
+  // what it is — the engine was previously invisible behind a dev gate).
+  const _pv = resolveSpell();
+  const rawDmg = _pv ? _pv.damage : 0;
+  const dmg = _pv ? netEnemyDamage(run, rawDmg, _pv) : 0;
   const sdEl = document.getElementById('spell-damage');
   sdEl.textContent = dmg > 0 ? dmg : '—';
   const heat = dmg <= 0 ? 0 : gfDamageTier(dmg);
   sdEl.className = 'spell-damage' + (heat >= 2 ? ' heat-' + heat : '');
-  document.getElementById('spell-formula').textContent = formulaText(present);
+  document.getElementById('spell-formula').innerHTML = formulaBreakdown(_pv, present, run);
 
   // P2 "teach the ceiling": point brand-new players at the strong multi-rune
   // line. The deck-rail (above) makes ≥3 of one element actually land in hand,
@@ -2955,14 +2979,24 @@ function renderGame(){
   if(coachEl){
     let msg = '';
     if(runHelp() >= 2){
-      const byEl = {};
-      run.hand.forEach(id=>{ const r=RUNES.find(x=>x.id===id); if(r) byEl[r.element]=(byEl[r.element]||0)+1; });
+      // Teach whichever synergy the hand can ACTUALLY make this turn. The
+      // starter deck rarely holds an element pair but always holds a SHAPE pair
+      // (Bolt: ember+ray, Pulse: gust+veil, Sigil: hollow+tally), so a brand-new
+      // player can feel the multiplier jump on their very first cast.
+      const byEl = {}, bySh = {};
+      run.hand.forEach(id=>{ const r=RUNES.find(x=>x.id===id); if(r){ byEl[r.element]=(byEl[r.element]||0)+1; bySh[r.shape]=(bySh[r.shape]||0)+1; } });
       const topEl = Object.keys(byEl).sort((a,b)=>byEl[b]-byEl[a])[0];
-      const monoStaged = present.length>=3 && new Set(present.map(r=>r.element)).size===1;
-      if(!monoStaged && topEl && byEl[topEl] >= 3){
+      const topSh = Object.keys(bySh).sort((a,b)=>bySh[b]-bySh[a])[0];
+      const monoElStaged = present.length>=3 && new Set(present.map(r=>r.element)).size===1;
+      const monoShStaged = present.length>=3 && new Set(present.map(r=>r.shape)).size===1;
+      if(!monoElStaged && topEl && byEl[topEl] >= 3){
         msg = `▲ Fuse 3 ${topEl} runes in one spell — huge hit`;
+      } else if(!monoShStaged && topSh && bySh[topSh] >= 3){
+        msg = `▲ Fuse 3 ${topSh}-shape runes — same idea, big XMULT`;
       } else if(present.length===0 && topEl && byEl[topEl] >= 2){
-        msg = `▲ Stack one element — your ${topEl} runes combo hard`;
+        msg = `▲ Stack your ${topEl} runes — same element multiplies`;
+      } else if(present.length===0 && topSh && bySh[topSh] >= 2){
+        msg = `▲ Stack 2 ${topSh}-shape runes — same shape multiplies`;
       }
     }
     coachEl.textContent = msg;
@@ -2999,6 +3033,37 @@ function formulaText(runes){
     const el = r.element[0];
     return `${el}·${r.basePower}`;
   }).join(' + ');
+}
+
+/* Batch D: the legible breakdown — POWER → ×XMULT [reasons] → ×fluency = N.
+   Reuses the trace resolveSpell already builds (was dev-gated). The single
+   biggest fix for the retention cliff: the 80% who never win could not SEE
+   the multiplier that wins. Colour language matches Balatro: POWER blue-ish,
+   XMULT gold. */
+function formulaBreakdown(result, present, run){
+  if(!result || !result.trace || !present.length) return '<span class="fb-op">stage runes to inscribe a spell</span>';
+  const t = result.trace;
+  const segs = [`<span class="fb-pow">POWER ${Math.round(t.baseSum)}</span>`];
+  const mult = (t.globalMult || 1) * (t.xmult || 1);
+  if(mult > 1.005){
+    const els = {}, shs = {};
+    present.forEach(r=>{ els[r.element] = (els[r.element]||0)+1; shs[r.shape] = (shs[r.shape]||0)+1; });
+    const topEl = Object.entries(els).sort((a,b)=>b[1]-a[1])[0];
+    const topSh = Object.entries(shs).sort((a,b)=>b[1]-a[1])[0];
+    const rs = [];
+    if(t.elementMult > 1 && topEl) rs.push(`${topEl[1]} ${topEl[0]}`);
+    if(t.shapeMult   > 1 && topSh) rs.push(`${topSh[1]} ${topSh[0]}`);
+    segs.push(`<span class="fb-xm">×${mult.toFixed(mult < 10 ? 2 : 1)} XMULT</span>${rs.length ? `<span class="fb-rs">[${rs.join(' · ')}]</span>` : ''}`);
+  }
+  if(t.spellRetrigger) segs.push(`<span class="fb-xm">×${(1 + t.spellRetrigger).toFixed(2)} retrigger</span>`);
+  if(t.fluencyMult > 1.005) segs.push(`<span class="fb-fl">×${t.fluencyMult.toFixed(2)} fluency</span>`);
+  // armor step (Batch C1) — show the foe shaving the hit, or a pierce
+  const enemy = run && intentEnemy(run);
+  if(enemy && enemy.armor){
+    if(result.trueDamage || result.ignoreWard) segs.push(`<span class="fb-pierce">pierces armor</span>`);
+    else segs.push(`<span class="fb-armor">−${enemy.armor} armor</span>`);
+  }
+  return segs.join('<span class="fb-op">→</span>');
 }
 
 function handleHandTap(handIdx){
@@ -3211,8 +3276,8 @@ function showIntro(){
     <div style="font-family:'IM Fell English',serif;color:var(--parchment-dk);font-size:14px;line-height:1.6;text-align:left;padding:4px 4px 12px;">
       <p style="margin:0 0 8px;">Fight 13 foes, then a boss. Each turn you fuse runes into one spell:</p>
       <p style="margin:0 0 6px;">① Tap up to <b>3 runes</b> from your hand — they fill slots <b>I · II · III</b>.</p>
-      <p style="margin:0 0 6px;">② <b>Order matters.</b> The gold number is live damage = POWER × XMULT.</p>
-      <p style="margin:0 0 6px;">③ Same <b>element</b> or <b>shape</b> multiplies hard — focus is power.</p>
+      <p style="margin:0 0 6px;">② <b>Order matters.</b> The gold number is live damage = POWER × <b>XMULT</b>. The little line beside it shows exactly how it adds up.</p>
+      <p style="margin:0 0 6px;">③ <b>XMULT</b> is a multiplier that compounds when your runes share an <b>element</b> or a <b>shape</b> — 3 of a kind multiplies <i>hard</i>. That's where big numbers come from.</p>
       <p style="margin:0 0 6px;">④ Tap <b>Inscribe</b> to cast. Survive, take a reward, repeat.</p>
       <p style="margin:8px 0 0;color:var(--parchment-sh);">Your <b>Sigil</b> (picked at run start) blesses one element and seals another — that's your build. Casting a rune <b>binds</b> its element and reveals deeper runes. Combos you discover are named in the codex forever.</p>
     </div>
