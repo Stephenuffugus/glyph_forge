@@ -1,5 +1,35 @@
 # RESUME — pick up here the moment you say "lets get started"
 
+## ★ LATEST (2026-06-29): COMBAT-DEPTH OVERHAUL on branch `combat-depth-overhaul`
+A full audit + competition-research pass (Balatro / Slay the Spire / Monster
+Train / Into the Breach) found the core problem: a deep, juicy scoring ENGINE
+with almost no GAME around it — the enemy was a flat damage-clock and the XMULT
+math was invisible. Six tested batches (A-F) on the branch fixed that. See
+**BUILD_PLAN.md** for the full plan + the v1.1 backlog. Shipped:
+- **Telegraphed enemy intent** — every turn the foe shows ATTACK n / CHARGING→
+  UNLEASH / MEND, flavored by element tag. Every turn is now a decision.
+- **Armor + pierce** (tier-3 + boss) — revived the dead `ignoreWard`/`trueDamage`
+  plumbing (Hollow/Eclipse/Storm Sigil finally matter).
+- **Legible engine** — live `POWER → ×XMULT [reasons] → ×fluency = N` breakdown
+  under the gold number; XMULT defined. The #1 retention fix.
+- **A real 3-phase Sovereign** that reads your dominant element and counters it
+  (telegraphed), with a harder "final verse".
+- **Forget-a-Glyph** deck-thinning + visible **transmutation chase** + **win-free
+  Mastery goals** (Detonator / Alchemist / Wayfarer).
+
+State: `node test.js` green, `node sim-run.js` overall **47.1%** (band 30-55),
+all Sigils in band, **determinism PASS**. Build stamp **`b17 combat-depth`**.
+**NOT yet merged/deployed** — I built on a branch and did NOT push to `main`
+(main auto-deploys live to GitHub Pages and you were mid-playtest). To go live:
+`git checkout main && git merge combat-depth-overhaul && git push` (PWA auto-
+updates within ~60s). Deferred (v1.1): full status system (Vulnerable/Weak/
+Poison), burn DoT, attrition/heal-cut, champion-path accumulate, relic re-tune.
+
+---
+
+> (Below: the prior phone-playtest checklist from the b16 session — still valid
+> for on-device testing once b17 is deployed.)
+
 > Paused mid playtest-iterate loop (user took a break). Everything
 > committed/pushed/saved, b16 live. Walk the two checklists below.
 

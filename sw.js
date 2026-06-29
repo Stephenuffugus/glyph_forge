@@ -6,7 +6,7 @@
 /* Bump this string on every deploy — `activate` purges any cache whose key
    != CACHE, so a new value force-evicts the old shell and the fresh
    index.html is fetched. (Unrelated to the localStorage save key.) */
-const CACHE = 'gf-shell-2026-05-19-b16';
+const CACHE = 'gf-shell-2026-06-29-b17';
 const SHELL = [
   './',
   './index.html',

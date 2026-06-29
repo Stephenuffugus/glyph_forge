@@ -2530,7 +2530,7 @@ function cast(){
   // Batch D: overkill flourish — a spell that buries the foe with room to spare
   const overkill = netDmg >= ehpBefore * 2 && ehpBefore >= 12;
   // Batch E: Sovereign phase-transition reveal (fires once per threshold crossed)
-  if(intentEnemy(run).boss && run.enemyHp > 0){
+  if((intentEnemy(run)||{}).boss && run.enemyHp > 0){
     const ph = bossPhase(run);
     if(ph > (run.bossPhaseSeen||0)){
       run.bossPhaseSeen = ph;
@@ -3637,7 +3637,7 @@ function showComboBanner(name, isNew, big){
 /* Build stamp — bump on every deploy so the title screen proves which
    version you're actually running (kills "did the patch land?" during
    playtest). */
-const GF_BUILD = '2026-05-19 · b16 codex-dock+bigger';
+const GF_BUILD = '2026-06-29 · b17 combat-depth';
 
 /* ----- 13b. LINKS + SHARE (the funnel) -----
    Set GF_LINKS.itch to your itch.io page URL once it exists. While empty,

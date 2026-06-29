@@ -33,22 +33,39 @@ threat-meter anchor) — the work is wiring + tuning, not inventing.
   Ascension — never inside `resolveSpell` — so tier-0 stays byte-identical where
   intended and veteran builds aren't flattened.
 
-## Batches
-- **A · Foundation** ✅ honest harness (sim no longer over-counts hand size) +
-  determinism. Re-baselined.
-- **B · Enemy Intent** — telegraphed, tag-flavored intents (ATTACK/CHARGE/GUARD/
-  MEND/HEX) in the threat meter; expected damage ≈ current flat threat so baseline
-  holds. *Transformative.*
-- **C · Defense + Status + Attrition** — Ward verb, enemy armor/ward, revive
-  `ignoreWard`/`trueDamage`/`burn`, Vulnerable/Weak/Poison, scarcer heal. *High
-  balance risk — re-tune to band.*
-- **D · Legibility + Juice** — un-hide the XMULT math under the gold number,
-  define XMULT, teach a turn-1 *shape* pair, sequential number-climb + ASCENDED
-  overkill, inline card effect text.
-- **E · Sculpt + Boss + Surfacing** — Forget-a-Glyph deck-thinning, multi-phase
-  Sovereign that reads your dominant pattern, visible transmutation triads.
-- **F · Goals + polish** — non-win Mastery goals, champion-path accumulate,
-  Sigil-picker clarity, surface Final Page's hidden +2.
+## Batches — ALL SHIPPED ✅ (branch `combat-depth-overhaul`)
+- **A · Foundation** ✅ honest harness (sim no longer over-counts hand size).
+  Re-baselined 56.0 → 49.1%.
+- **B · Enemy Intent** ✅ telegraphed, tag-flavored intents (ATTACK / CHARGE→
+  UNLEASH / MEND) in the threat meter; damage-neutral (49.1 → 49.7%), shared
+  pure `lockIntent`/`executeIntent` so the sim measures real behavior.
+- **C1 · Armor + pierce** ✅ tier-3+boss `armor`; `ignoreWard`/`trueDamage`
+  revived (bypass it); HP-compensated to ~neutral (50.3%). (C2 status/attrition
+  deferred — see backlog.)
+- **D · Legibility** ✅ live POWER→XMULT→fluency breakdown, XMULT defined,
+  turn-1 *shape*-pair coach, ASCENDED overkill. Pure display.
+- **E · Sculpt + Boss + Surfacing** ✅ 3-phase Sovereign that reads your dominant
+  element (47.1%), Forget-a-Glyph deck-thinning, transmutation chase chip.
+- **F · Goals + polish** ✅ win-free Mastery goals (Detonator/Alchemist/Wayfarer),
+  Sigil-picker taglines + Free-last, Final Page hidden +2 surfaced.
+
+Final sim: **overall 47.1%** (band 30-55), all 7 Sigils in band, **determinism
+PASS**, `node test.js` green. Build stamp `b17 combat-depth`.
+
+## v1.1 backlog (deliberately deferred — scope/risk control)
+- **Full status system** (Vulnerable / Weak / Poison) via 2-3 new runes — the
+  defensive *answer* to the telegraph beyond Quake's stun, and Vulnerable-before-
+  XMULT deepens the order puzzle. Greedy AI undervalues cross-turn statuses, so
+  baseline-safe; design magnitudes by hand (StS-standard).
+- **Revive `burn`** (Wildfire's promised DoT) — needs the DoT tick + death-during-
+  enemy-turn handling; pairs with Poison.
+- **Attrition** — cut the inter-fight +8 heal to a scarce, chosen resource so HP
+  compounds. Highest balance risk; re-gate healing as reward choices first.
+- **Champion-path accumulate** — `run.champion.path = i` overwrites; the spec
+  tree should stack chosen branches (rewrite 6 `apply()` fns + re-sim).
+- **Codex "Resonances" catalog** + **sequential rune-by-rune cast animation**.
+- **Final relic/Sigil re-tune** (see balance debt above) now that combat systems
+  are settled.
 
 ## Honest baseline (post Batch-A harness fix, greedy-AI, 100 runs/Sigil)
 free 55 · ember 58 · order 65 · void 37 · tide 52 · zephyr 42 · umbra 35 —
