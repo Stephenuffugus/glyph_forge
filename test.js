@@ -52,7 +52,7 @@ const stubs = `
 const wrapped = `(function(){
   ${stubs}
   ${code}
-  return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, startNewRun, cast, drawOne, beginEncounter, lockIntent, executeIntent };
+  return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, startNewRun, cast, drawOne, beginEncounter, lockIntent, executeIntent, netEnemyDamage };
 })();`;
 
 const game = eval(wrapped);
@@ -206,6 +206,26 @@ let intentOK = true;
   console.log(`  ${id.padEnd(10)} threat=${A.threat} avgDmg/turn=${A.avg.toFixed(2)} (${(ratio*100).toFixed(0)}% of threat) det=${det?'PASS':'FAIL'} ${neutral?'':'⚠ off-band'}`);
 });
 console.log(intentOK ? '  ✓ intents deterministic & damage ≈ flat-threat baseline' : '  ✗ INTENT REGRESSION');
+
+console.log('\n=== ENEMY ARMOR + PIERCE (Batch C1) ===');
+function netVs(enemyId, raw, result){
+  return game.netEnemyDamage({ path:[{enemyId}], encounterIdx:0 }, raw, result || {});
+}
+const armEnemy = game.ENEMIES.find(e=>e.armor); // Brass Revenant, armor 3
+let armorOK = true;
+const checks = [
+  ['raw 20 vs armor',        netVs(armEnemy.id, 20, {}),                 20 - armEnemy.armor],
+  ['raw 20 trueDamage',      netVs(armEnemy.id, 20, {trueDamage:true}),  20],
+  ['raw 20 ignoreWard',      netVs(armEnemy.id, 20, {ignoreWard:true}),  20],
+  ['raw 2 fully blocked',    netVs(armEnemy.id, 2, {}),                  0],
+  ['unarmored (cinder) 20',  netVs('cinder', 20, {}),                    20],
+];
+console.log(`  armored foe: ${armEnemy.name} armor=${armEnemy.armor}`);
+checks.forEach(([label, got, want])=>{
+  if(got !== want) armorOK = false;
+  console.log(`  ${label.padEnd(22)} ${got} (expect ${want}) ${got===want?'':'⚠'}`);
+});
+console.log(armorOK ? '  ✓ armor shaves flat; pierce (trueDamage/ignoreWard) bypasses' : '  ✗ ARMOR REGRESSION');
 
 console.log('\n=== ENEMY HP CHECK ===');
 game.ENEMIES.forEach(e => console.log(`  T${e.tier} ${e.name.padEnd(18)} HP:${e.hp} Threat:${e.threat} ${e.boss?'[BOSS]':''}`));

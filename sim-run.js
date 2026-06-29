@@ -16,7 +16,7 @@ const stubs = `
   const confirm = ()=>true;
 `;
 
-const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, onSpellBound, ensureRunDepth, RELICS, SIGILS, CHAMPIONS, TRANSMUTATIONS, lockIntent, executeIntent };})()`);
+const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, onSpellBound, ensureRunDepth, RELICS, SIGILS, CHAMPIONS, TRANSMUTATIONS, lockIntent, executeIntent, netEnemyDamage };})()`);
 
 // Replicate run logic locally so we don't need DOM-touching functions.
 // grantRelics: optional array of relic ids force-bound at run start (relic matrix).
@@ -87,33 +87,26 @@ function beginEnc(run){
 }
 
 function tryAllSpells(run){
-  // brute force: try every combination of up to 3 from hand, return best
+  // brute force: try every combination of up to 3 from hand, return best.
+  // Rank by NET damage (post-armor) so the AI correctly values pierce runes
+  // against armored foes — flat armor otherwise preserves raw ordering.
   const hand = run.hand;
   let best = { damage: 0, indices: [] };
-  // single
-  hand.forEach((id, i)=>{
-    setSpell(run, [i]);
+  const consider = (indices)=>{
+    setSpell(run, indices);
     const r = sim(run);
-    if(r && r.damage > best.damage) best = { damage: r.damage, indices: [i], result: r };
-  });
-  // pair
+    if(!r) return;
+    const net = game.netEnemyDamage ? game.netEnemyDamage(run, r.damage, r) : r.damage;
+    if(net > best.damage) best = { damage: net, indices: indices.slice(), result: r };
+  };
   for(let i=0;i<hand.length;i++){
+    consider([i]);
     for(let j=0;j<hand.length;j++){
       if(i===j) continue;
-      setSpell(run, [i, j]);
-      const r = sim(run);
-      if(r && r.damage > best.damage) best = { damage: r.damage, indices: [i,j], result: r };
-    }
-  }
-  // triple
-  for(let i=0;i<hand.length;i++){
-    for(let j=0;j<hand.length;j++){
-      if(i===j) continue;
+      consider([i, j]);
       for(let k=0;k<hand.length;k++){
         if(k===i||k===j) continue;
-        setSpell(run, [i, j, k]);
-        const r = sim(run);
-        if(r && r.damage > best.damage) best = { damage: r.damage, indices: [i,j,k], result: r };
+        consider([i, j, k]);
       }
     }
   }
@@ -147,7 +140,9 @@ function applyCast(run){
   // mirror cast(): bind elements, fire transmutations/prophecy, advance counter
   if(game.onSpellBound) try{ game.onSpellBound(run, result.presentRunes||[], result); }catch(e){}
   run.castCount = (run.castCount||0) + 1;
-  run.enemyHp = Math.max(0, run.enemyHp - result.damage);
+  // Batch C1: enemy armor (shared helper, unless the spell pierces)
+  const netDmg = game.netEnemyDamage ? game.netEnemyDamage(run, result.damage, result) : result.damage;
+  run.enemyHp = Math.max(0, run.enemyHp - netDmg);
   if(result.healing) run.hp = Math.min(run.maxHp, run.hp + result.healing);
 
   // remove placed runes from hand, push to discard
@@ -165,6 +160,7 @@ function applyCast(run){
   // refill to 5
   while(run.hand.length < 5 && (run.deck.length>0 || run.discard.length>0)) draw(run);
 
+  result.netDamage = netDmg;   // actual damage that landed (post-armor)
   return result;
 }
 
@@ -236,8 +232,9 @@ function runOne(seedStr, sigilId, grantRelics){
     setSpell(run, best.indices);
     const spellRunes = best.indices.map(i=>run.hand[i]).filter(Boolean);
     const result = applyCast(run);
-    run.log.push(`  T${run.encounterIdx+1} cast [${spellRunes.join('+')}] dmg=${result.damage} enemy=${run.enemyHp}/${run.enemyMaxHp}`);
-    run.dmgLog.push({ enc: run.encounterIdx, runes: spellRunes.slice(), dmg: result.damage });
+    const _shown = (result.netDamage != null ? result.netDamage : result.damage);
+    run.log.push(`  T${run.encounterIdx+1} cast [${spellRunes.join('+')}] dmg=${_shown} enemy=${run.enemyHp}/${run.enemyMaxHp}`);
+    run.dmgLog.push({ enc: run.encounterIdx, runes: spellRunes.slice(), dmg: _shown });
 
     if(run.enemyHp <= 0){
       run.log.push(`  >> defeated ${game.ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId).name}`);
