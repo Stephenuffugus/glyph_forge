@@ -281,6 +281,8 @@
   .hud-depth .dchip b { color: var(--gilt-bright); font-weight: 700; }
   .hud-depth .dchip.dim { color: var(--parchment-sh); }
   .hud-depth .dprophecy.done { color: var(--verdigris); }
+  .hud-depth .dchase { color: #b48ad8; }
+  .hud-depth .dchase b { color: #d9b6f0; }
   /* tap-tooltip: title= is dead on touch — these chips are tappable */
   .hud-depth .dchip[data-tip], .hud-stat[data-tip] { cursor: help; }
   .hud-depth .dchip[data-tip]::after {
@@ -459,6 +461,13 @@
   .enemy-intent.intent-mend   { border-color: #347b58; color: #7fd4a0; background: rgba(14, 44, 30, 0.5); }
   @keyframes gf-intent-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
   @media (prefers-reduced-motion: reduce) { .enemy-intent.intent-unleash { animation: none; } }
+  /* Sovereign "reads your line" badge (Batch E) */
+  .boss-read {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em;
+    color: #c98ad0; border: 1px solid #6b3a78; background: rgba(48, 18, 56, 0.5);
+    padding: 2px 9px; border-radius: 10px; cursor: pointer;
+  }
+  .boss-read b { color: #e6b8ee; }
   /* Enemy armor badge (Batch C1) */
   .enemy-armor {
     display: inline-flex; align-items: center; gap: 3px;
@@ -1696,10 +1705,25 @@ const INTENT_TABLES = {
   default: [['attack',0.80],['charge',0.15],['mend',0.05]],
 };
 function intentEnemy(run){ return ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId); }
+// Batch E: the Sovereign fights in 3 phases by remaining HP.
+function bossPhase(run){
+  const e = intentEnemy(run);
+  if(!e || !e.boss) return 0;
+  const frac = run.enemyMaxHp ? run.enemyHp/run.enemyMaxHp : 1;
+  return frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
+}
+// The element this run leans on hardest (what the boss will counter).
+function runDominantElement(run){
+  const t = run && run.patternTally;
+  if(!t) return null;
+  const top = Object.entries(t).sort((a,b)=>b[1]-a[1])[0];
+  return (top && top[1] > 0) ? top[0] : null;
+}
 // Lock the action the enemy will take on the UPCOMING player turn (and show it).
 function lockIntent(run){
   const enemy = intentEnemy(run);
-  const t = run.currentThreat || enemy.threat;
+  let t = run.currentThreat || enemy.threat;
+  if(enemy.boss && bossPhase(run) >= 3) t += 2;   // Batch E: the final verse hits harder
   const recoil = (run.relics && run.relics.includes('final-page')) ? 2 : 0;  // glass-cannon tax
   run.turnInEnc = (run.turnInEnc || 0) + 1;
   // A charge always resolves into a telegraphed UNLEASH on the following turn.
@@ -2001,6 +2025,9 @@ function ensureRunDepth(run){
   if(typeof run.turnInEnc !== 'number') run.turnInEnc = 0;
   if(run.intent === undefined) run.intent = null;
   if(typeof run.pendingUnleash !== 'boolean') run.pendingUnleash = false;
+  // Batch E: per-run dominant-pattern tally (boss counter) + boss-phase banner latch
+  if(!run.patternTally) run.patternTally = {};
+  if(typeof run.bossPhaseSeen !== 'number') run.bossPhaseSeen = 0;
 }
 function sigilOf(run){ return SIGILS.find(s=>s.id===(run&&run.sigil))||SIGILS[0]; }
 /* Apprentice Inscription — onboarding scaffolding for the new-player cliff.
@@ -2031,10 +2058,22 @@ function applyDepth(ctx, run, phase){
       try{ CHAMPIONS[run.champion.id].apply(ctx, run.champion.level||1, run.champion.path||0); }catch(e){}
     }
     RELICS.forEach(rel=>{ if(run.relics.includes(rel.id) && rel.phase==='post'){ try{ rel.hook(ctx); }catch(e){} } });
-    // Phase 6: counter-boss — the Sovereign "reads" your dominant pattern and
-    // dampens a mono-element triple, forcing a second viable line for the climax.
+    // Batch E counter-boss — the Sovereign reads YOUR run's dominant element
+    // (the line you actually leaned on, not just "any mono triple") and, once
+    // it drops past phase 1 (66% HP), dampens spells built on it — so you must
+    // bring a real second line for the climax. Telegraphed in the UI; partial
+    // (×0.55) so your primary still works, just not as a finisher. Lives in the
+    // shared resolveSpell path, so the sim measures it automatically.
     const node = run.path && run.path[run.encounterIdx];
-    if(node && node.enemyId==='sovereign' && ctx._maxEl>=3) ctx.xmult *= 0.6;
+    if(node && node.enemyId==='sovereign'){
+      const ph = bossPhase(run);
+      if(ph >= 2){
+        const dom = runDominantElement(run);
+        const elc = {}; ctx.runes.forEach(r=>{ if(r) elc[r.element] = (elc[r.element]||0)+1; });
+        if(dom && (elc[dom]||0) >= 3) ctx.xmult *= 0.6;         // your full mono line, countered
+        else if(ctx._maxEl >= 3) ctx.xmult *= 0.9;             // any other mono triple, lightly
+      }
+    }
   }
 }
 
@@ -2043,6 +2082,13 @@ function applyDepth(ctx, run, phase){
 function onSpellBound(run, present, result){
   ensureRunDepth(run);
   present.forEach(r=>{ if(r && !run.boundElements.includes(r.element)) run.boundElements.push(r.element); });
+  // Batch E: track the run's dominant line so the Sovereign can read & counter
+  // YOUR actual grammar (not just "any mono triple"). Tally the element a spell
+  // leans on (2+ of one element). Pure + shared, so the sim sees it too.
+  const _elc = {};
+  present.forEach(r=>{ if(r) _elc[r.element] = (_elc[r.element]||0)+1; });
+  const _dom = Object.entries(_elc).sort((a,b)=>b[1]-a[1])[0];
+  if(_dom && _dom[1] >= 2){ run.patternTally = run.patternTally || {}; run.patternTally[_dom[0]] = (run.patternTally[_dom[0]]||0)+1; }
   const boundIds = new Set([...(run.progression._boundIds||[]), ...present.map(r=>r.id)]);
   run.progression._boundIds = [...boundIds];
   TRANSMUTATIONS.forEach(tx=>{
@@ -2237,6 +2283,9 @@ function startNewRun(seedStr, sigilId, asc){
     turnInEnc: 0,
     intent: null,
     pendingUnleash: false,
+    // Batch E: boss-counter pattern tally + phase-banner latch
+    patternTally: {},
+    bossPhaseSeen: 0,
   };
   state.run.progression.prophecy = prophecyPick(state.run, mulberry32(seed + 999));
   state.meta.runsAttempted += 1;
@@ -2464,6 +2513,16 @@ function cast(){
   run.enemyHp = Math.max(0, run.enemyHp - netDmg);
   // Batch D: overkill flourish — a spell that buries the foe with room to spare
   const overkill = netDmg >= ehpBefore * 2 && ehpBefore >= 12;
+  // Batch E: Sovereign phase-transition reveal (fires once per threshold crossed)
+  if(intentEnemy(run).boss && run.enemyHp > 0){
+    const ph = bossPhase(run);
+    if(ph > (run.bossPhaseSeen||0)){
+      run.bossPhaseSeen = ph;
+      const dom = runDominantElement(run);
+      if(ph===2) showComboBanner(dom ? `THE SOVEREIGN READS YOUR ${dom.toUpperCase()}` : 'THE SOVEREIGN READS YOUR GRAMMAR', true, true);
+      else if(ph===3) showComboBanner('THE SOVEREIGN — THE FINAL VERSE', true, true);
+    }
+  }
 
   // healing
   if(result.healing > 0){
@@ -2735,7 +2794,72 @@ function showRewardModal(){
     }
   });
 
+  // Batch E: deck-thinning — sculpt the deck instead of growing it. Self-
+  // limiting (you forgo this reward) and floored so it can't degenerate. Great
+  // for excising a Sigil-sealed dead draw. Human-only: the sim never thins, so
+  // the balance baseline is unchanged and this can only help, never break it.
+  const _totalRunes = run.deck.length + run.discard.length + run.hand.length + run.spell.filter(Boolean).length;
+  if(_totalRunes > 6){
+    choices.push({
+      isForget: true,
+      onClick: ()=> forgetGlyphPicker(
+        ()=>{ run.encounterIdx += 1; hideModal(); beginEncounter(); },
+        ()=> renderRewardModal(choices))
+    });
+  }
+
   renderRewardModal(choices);
+}
+
+// Remove a single instance of a rune id from wherever it lives in the deck.
+function removeOneFromDeck(run, id){
+  for(const pile of [run.hand, run.deck, run.discard]){
+    const i = pile.indexOf(id);
+    if(i !== -1){ pile.splice(i, 1); return true; }
+  }
+  const si = run.spell.indexOf(id);
+  if(si !== -1){ run.spell[si] = null; return true; }
+  return false;
+}
+
+// Batch E: the Forget-a-Glyph picker — strike one rune from the run forever.
+function forgetGlyphPicker(advance, onCancel){
+  const run = state.run;
+  const sg = sigilOf(run);
+  const all = [...run.deck, ...run.discard, ...run.hand, ...run.spell.filter(Boolean)];
+  const counts = {};
+  all.forEach(id=>{ counts[id] = (counts[id]||0)+1; });
+  const m = document.getElementById('modal-content');
+  m.innerHTML = `<h2>Forget a Glyph</h2>
+    <p>Strike one rune from your codex for the rest of this run — a leaner deck draws your strongest lines more often.</p>
+    <div class="choices" id="forget-list"></div>`;
+  const list = m.querySelector('#forget-list');
+  Object.keys(counts).sort((a,b)=>{
+    const ra=RUNES.find(x=>x.id===a), rb=RUNES.find(x=>x.id===b);
+    const sa = sg.forbid&&ra&&sg.forbid.includes(ra.element)?0:1;
+    const sb = sg.forbid&&rb&&sg.forbid.includes(rb.element)?0:1;
+    return sa-sb || a.localeCompare(b);          // sealed dead-draws first
+  }).forEach(id=>{
+    const r = RUNES.find(x=>x.id===id); if(!r) return;
+    const sealed = sg.forbid && sg.forbid.includes(r.element);
+    const el = document.createElement('div');
+    el.className = 'reward-rune';
+    el.innerHTML = `${runeCardHTML(r, true)}
+      <div class="reward-rune-info">
+        <span class="name">${r.name}${counts[id]>1?` ×${counts[id]}`:''}${sealed?' · <span style="color:var(--crimson)">SEALED</span>':''}</span>
+        <span class="desc">${r.desc}</span>
+        <span class="tags">${r.element} · ${r.shape}${sealed?' · dead draw — your Sigil seals it':''}</span>
+      </div>`;
+    el.onclick = ()=>{ removeOneFromDeck(run, id); GFAudio.reward(); advance(); };
+    list.appendChild(el);
+  });
+  const back = document.createElement('div');
+  back.className = 'reward-rune';
+  back.style.justifyContent = 'center';
+  back.innerHTML = `<div class="reward-rune-info" style="text-align:center"><span class="name">← Keep them all</span><span class="desc">Back to the offering.</span></div>`;
+  back.onclick = ()=> (onCancel ? onCancel() : hideModal());
+  list.appendChild(back);
+  document.getElementById('modal-bg').classList.add('active');
 }
 
 /* Phase 3/4: generic card-list picker (relics, champion, etc.) */
@@ -2773,12 +2897,27 @@ function renderRewardModal(choices){
       el.className = 'reward-rune';
       el.innerHTML = `
         <div class="rune" style="display:grid;place-items:center;">
-          <div style="font-size:24px;color:var(--gilt);">+6</div>
+          <div style="font-size:24px;color:var(--gilt);">+10</div>
         </div>
         <div class="reward-rune-info">
           <span class="name">Mend The Vellum</span>
           <span class="desc">Skip the offering. Restore 10 HP.</span>
           <span class="tags">heal</span>
+        </div>
+      `;
+      el.onclick = c.onClick;
+      list.appendChild(el);
+    } else if(c.isForget){
+      const el = document.createElement('div');
+      el.className = 'reward-rune';
+      el.innerHTML = `
+        <div class="rune" style="display:grid;place-items:center;">
+          <div style="font-size:24px;color:var(--crimson);">⊘</div>
+        </div>
+        <div class="reward-rune-info">
+          <span class="name">Forget a Glyph</span>
+          <span class="desc">Strike one rune from your deck forever. A leaner deck finds your best lines.</span>
+          <span class="tags">thin · sculpt</span>
         </div>
       `;
       el.onclick = c.onClick;
@@ -2888,6 +3027,19 @@ function renderGame(){
     const bound = (run.boundElements||[]);
     if(bound.length) chips.push(`<span class="dchip dim" data-tip="Elements bound this run unlock their deeper runes">⛓ ${bound.join(' ')}</span>`);
     if(sg.forbid && sg.forbid.length) chips.push(`<span class="dchip dim" data-tip="Sealed by your Sigil — these runes deal 0">⊘ ${sg.forbid.join(' ')}</span>`);
+    // Batch E: transmutation chase — surface the closest hidden triad as a
+    // visible build goal (it was an invisible easter egg that drove no drafting).
+    const _boundIds = new Set(run.progression._boundIds || []);
+    let _bestTx = null, _bestN = 0;
+    TRANSMUTATIONS.forEach(tx=>{
+      if(run.progression.transmuted.includes(tx.id)) return;
+      const n = tx.members.filter(m=>_boundIds.has(m)).length;
+      if(n > _bestN){ _bestN = n; _bestTx = tx; }
+    });
+    if(_bestTx && _bestN >= 1){
+      const need = _bestTx.members.filter(m=>!_boundIds.has(m)).map(m=>{ const r=RUNES.find(x=>x.id===m); return r?r.name:m; });
+      chips.push(`<span class="dchip dchase" data-tip="Cast all three of this hidden triad in one run to TRANSMUTE → a run-rewiring relic. Still need: ${need.join(', ')}.">⚗ ${_bestTx.name} <b>${_bestN}/3</b></span>`);
+    }
     dEl.innerHTML = chips.join('');
   }
 
@@ -2918,6 +3070,12 @@ function renderGame(){
       (iv.num != null ? `<span class="ei-num">${iv.num}</span>` : '') +
     `</div>` +
     `<div class="threat-pips">${pips}</div>`;
+  // Batch E: once the Sovereign drops past phase 1, show the line it's countering
+  if(bossPhase(run) >= 2){
+    const dom = runDominantElement(run);
+    if(dom) threatMeter.innerHTML +=
+      `<div class="boss-read" data-tip="The Sovereign dampens spells built on ${dom} — the element you leaned on most. Finish it with a second line.">⟁ counters <b>${dom}</b></div>`;
+  }
 
   // Spell slots
   const slotsEl = document.getElementById('spell-slots');

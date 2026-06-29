@@ -56,6 +56,8 @@ function newSim(seedStr, sigilId, grantRelics){
     boundElements: [], castCount: 0,
     // Batch B: enemy intent (mirrors startNewRun; beginEnc locks the first action)
     turnInEnc: 0, intent: null, pendingUnleash: false,
+    // Batch E: boss-counter pattern tally + phase latch
+    patternTally: {}, bossPhaseSeen: 0,
     log: [], dmgLog: [], champPeakLevel: (sg.champion ? 1 : 0)
   };
 }
