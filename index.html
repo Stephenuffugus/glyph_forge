@@ -468,6 +468,7 @@
     padding: 2px 9px; border-radius: 10px; cursor: pointer;
   }
   .boss-read b { color: #e6b8ee; }
+  .reward-rune.sigil-advanced { opacity: 0.78; }
   /* Enemy armor badge (Batch C1) */
   .enemy-armor {
     display: inline-flex; align-items: center; gap: 3px;
@@ -1879,7 +1880,7 @@ const RELICS = [
     desc:'Same-element triples gain an extra ×1.5 XMULT.',
     phase:'post', hook:(ctx)=>{ if(ctx._maxEl>=3) ctx.xmult *= 1.5; } },
   { id:'final-page',  name:'The Final Page',      rarity:'mythic',
-    desc:'XMULT raised to the 1.45 power — but the strain costs globalMult ×0.85.',
+    desc:'XMULT raised to the 1.45 power — but the strain costs globalMult ×0.85 AND the foe strikes you +2 every turn.',
     phase:'post', hook:(ctx)=>{ ctx.xmult = Math.pow(ctx.xmult, 1.45); ctx.globalMult *= 0.85; } },
   // ---- Expansion relics ----
   { id:'tidal-ledger',  name:'The Tidal Ledger',   rarity:'common',
@@ -2096,6 +2097,7 @@ function onSpellBound(run, present, result){
     if(tx.members.every(m=>boundIds.has(m))){
       run.progression.transmuted.push(tx.id);
       if(!run.relics.includes(tx.id)) run.relics.push(tx.id);
+      if(state.meta) state.meta.transmutationsEver = (state.meta.transmutationsEver||0) + 1;  // Batch F goal
       showComboBanner('TRANSMUTED · ' + tx.name, true);
     }
   });
@@ -2181,6 +2183,13 @@ const MASTERY = [
     done:m=>(m.ascensionBeaten||0) >= 3 },
   { id:'unwritten', name:'The Unwritten',  tip:'Clear the final Ascension.',
     done:m=>(m.ascensionBeaten||0) >= ASCENSIONS.length-1 },
+  // Batch F: win-free goals — reachable while still learning the engine.
+  { id:'detonator', name:'Detonator',      tip:'Land a single spell for 200+ damage.',
+    done:m=>(m.peakDamage||0) >= 200 },
+  { id:'alchemist', name:'Alchemist',      tip:'Complete a hidden transmutation triad.',
+    done:m=>(m.transmutationsEver||0) >= 1 },
+  { id:'wayfarer',  name:'Wayfarer',       tip:'Reach encounter 10 in a run.',
+    done:m=>(m.deepestReached||0) >= 10 },
 ];
 
 /* ----- 5. STATE ----- */
@@ -2203,6 +2212,11 @@ function defaultState(){
       sigilWins: {},           // sigilId -> 13/13 win count
       daily: { lastDate:null, streak:0, bestStreak:0, scores:{} },
       mastery: { seals:[] },   // earned milestone seal ids
+      // Batch F: reachable, win-free progress (so the ~80% who never win still
+      // have goals tied to experimentation). Additive; old saves merge-default.
+      peakDamage: 0,           // biggest single spell ever landed
+      transmutationsEver: 0,   // hidden triads ever completed
+      deepestReached: 0,       // furthest encounter reached in any run
     },
     run: null,
   };
@@ -2511,6 +2525,8 @@ function cast(){
   const netDmg = netEnemyDamage(run, result.damage, result);
   const ehpBefore = run.enemyHp;
   run.enemyHp = Math.max(0, run.enemyHp - netDmg);
+  // Batch F: track the biggest hit ever (a win-free Mastery goal)
+  if(netDmg > (state.meta.peakDamage||0)) state.meta.peakDamage = netDmg;
   // Batch D: overkill flourish — a spell that buries the foe with room to spare
   const overkill = netDmg >= ehpBefore * 2 && ehpBefore >= 12;
   // Batch E: Sovereign phase-transition reveal (fires once per threshold crossed)
@@ -2625,6 +2641,7 @@ function onDefeat(){
   GFAudio.defeat();
   const seed = state.run && state.run.seed;
   const reached = state.run ? state.run.encounterIdx + 1 : 1;
+  state.meta.deepestReached = Math.max(state.meta.deepestReached||0, reached);  // Batch F goal
   window._gfResult = { seed, reached, won: false };
   const dd = recordDailyResult(seed, reached, false);
   const dailyLine = dd ? `<br><span style="color:var(--gilt)">Daily score ${dailyScore(reached,false)} · ${dd.streak}-day streak 🔥</span>` : '';
@@ -2649,6 +2666,7 @@ function onVictory(){
   window._gfResult = { seed: run.seed, reached: 13, won: true, asc };
   state.meta.runsCompleted += 1;
   state.meta.bestRun = Math.max(state.meta.bestRun, 13);
+  state.meta.deepestReached = Math.max(state.meta.deepestReached||0, 13);  // Batch F goal
   if(run.sigil) state.meta.sigilWins[run.sigil] = (state.meta.sigilWins[run.sigil] || 0) + 1;
   // Ascension unlock: clearing the highest tier you've reached opens the next.
   // Daily runs are fixed at tier 0 (fair shared seed) and never advance it.
@@ -3478,15 +3496,30 @@ function chooseSigil(){
     paintAsc();
   }
   const list = m.querySelector('#sigil-choices');
-  SIGILS.forEach(s=>{
+  // Batch F: plain-language "good for" lines so a new player can pick by
+  // intent, not by parsing boon math. Free (no element rail) is shown LAST and
+  // flagged "advanced" so it isn't the path-of-least-resistance blandest start.
+  const SIGIL_TAGLINES = {
+    free:  '◆ no element rail — for players who know the codex (advanced)',
+    ember: '🔥 good for: stacking Fire — aggressive, high tempo',
+    order: '┼ good for: one-element symmetry — XMULT compounds',
+    void:  '⊙ good for: high-risk Void payoffs — fragile, explosive',
+    tide:  '≈ good for: Water scaling — tanky, snowballs late',
+    zephyr:'≋ good for: Air chains & retrigger loops',
+    umbra: '☾ good for: Shadow + Light eclipse combos',
+  };
+  const ordered = SIGILS.slice().sort((a,b)=> (a.id==='free'?1:0) - (b.id==='free'?1:0));
+  ordered.forEach(s=>{
     const forb = (s.forbid&&s.forbid.length) ? ` · seals ${s.forbid.join('/')}` : '';
     const champ = s.champion && CHAMPIONS[s.champion] ? ` · Champion: ${CHAMPIONS[s.champion].name}` : '';
+    const tagline = SIGIL_TAGLINES[s.id] || '';
     const el = document.createElement('div');
-    el.className = 'reward-rune';
+    el.className = 'reward-rune' + (s.id==='free' ? ' sigil-advanced' : '');
     el.innerHTML = `
       <div class="rune" style="display:grid;place-items:center;font-size:26px;color:var(--gilt);">${s.element?s.element[0]:'∅'}</div>
       <div class="reward-rune-info">
         <span class="name">${s.name}</span>
+        ${tagline ? `<span class="desc" style="color:var(--gilt)">${tagline}</span>` : ''}
         <span class="desc">${s.desc}</span>
         <span class="tags">${(s.maxHp||50)} HP${forb}${champ}</span>
       </div>`;
