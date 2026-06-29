@@ -52,7 +52,7 @@ const stubs = `
 const wrapped = `(function(){
   ${stubs}
   ${code}
-  return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, startNewRun, cast, drawOne, beginEncounter };
+  return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, startNewRun, cast, drawOne, beginEncounter, lockIntent, executeIntent };
 })();`;
 
 const game = eval(wrapped);
@@ -178,6 +178,34 @@ for(let i=0;i<heavies.length;i++){
 console.log('Highest damage combo found:', max.combo?.join(' + '), '=>', max.dmg);
 console.log('Sample big hits:');
 samples.sort((a,b)=>b.dmg-a.dmg).slice(0, 10).forEach(s => console.log('  ', s.dmg.toString().padStart(6), '|', s.combo));
+
+console.log('\n=== ENEMY INTENT (Batch B): determinism + damage neutrality ===');
+function intentSeq(seed, enemyId, turns){
+  const enemy = game.ENEMIES.find(e=>e.id===enemyId);
+  const run = { rngSeed:seed, encounterIdx:0, currentThreat:enemy.threat,
+    enemyHp:9999, enemyMaxHp:9999, hp:1e9, maxHp:1e9, turnInEnc:0, intent:null,
+    pendingUnleash:false, path:[{enemyId}], relics:[] };
+  const seq=[]; let dmg=0;
+  for(let i=0;i<turns;i++){
+    game.lockIntent(run);
+    seq.push(run.intent.kind[0]);
+    const before = run.hp; game.executeIntent(run); dmg += (before - run.hp);
+  }
+  return { seq:seq.join(''), avg: dmg/turns, threat: enemy.threat };
+}
+let intentOK = true;
+['fenmote','revenant','cinder','glasswyrm','sovereign'].forEach(id=>{
+  const A = intentSeq(98765, id, 400);
+  const B = intentSeq(98765, id, 400);
+  const det = A.seq === B.seq;
+  // attack, charge cycles, and mend all average to ~threat per turn (mend deals
+  // full damage + heals), so a no-Sigil run takes ~the same total. Band: ±12%.
+  const ratio = A.avg / A.threat;
+  const neutral = ratio > 0.88 && ratio < 1.12;
+  if(!det || !neutral) intentOK = false;
+  console.log(`  ${id.padEnd(10)} threat=${A.threat} avgDmg/turn=${A.avg.toFixed(2)} (${(ratio*100).toFixed(0)}% of threat) det=${det?'PASS':'FAIL'} ${neutral?'':'⚠ off-band'}`);
+});
+console.log(intentOK ? '  ✓ intents deterministic & damage ≈ flat-threat baseline' : '  ✗ INTENT REGRESSION');
 
 console.log('\n=== ENEMY HP CHECK ===');
 game.ENEMIES.forEach(e => console.log(`  T${e.tier} ${e.name.padEnd(18)} HP:${e.hp} Threat:${e.threat} ${e.boss?'[BOSS]':''}`));

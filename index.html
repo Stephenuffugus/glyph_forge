@@ -429,8 +429,9 @@
     transition: width 0.28s ease-out;
   }
   .threat-meter {
-    display: flex; gap: 4px; margin-top: 4px;
+    display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 6px;
   }
+  .threat-pips { display: flex; gap: 4px; }
   .threat-pip {
     width: 10px; height: 10px;
     border: 1px solid var(--crimson-dk);
@@ -438,6 +439,26 @@
     transform: rotate(45deg);
   }
   .threat-pip.active { background: var(--crimson); box-shadow: 0 0 6px var(--crimson); }
+  /* Enemy INTENT — the telegraphed next action (Batch B). Reading the enemy is
+     now a per-turn decision, not an invisible flat tax. */
+  .enemy-intent {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.06em;
+    padding: 3px 11px; border-radius: 12px;
+    border: 1px solid var(--crimson-dk); background: rgba(40, 12, 12, 0.55); color: var(--crimson);
+    cursor: pointer;
+  }
+  .enemy-intent .ei-icon { font-size: 13px; line-height: 1; }
+  .enemy-intent .ei-num  { font-weight: 700; color: var(--parchment); }
+  .enemy-intent.intent-unleash {
+    border-color: var(--crimson); color: #ff9b7a; background: rgba(120, 18, 18, 0.5);
+    box-shadow: 0 0 14px rgba(168, 50, 50, 0.55);
+    animation: gf-intent-pulse 1.05s ease-in-out infinite;
+  }
+  .enemy-intent.intent-charge { border-color: #b78a35; color: #e8c46a; background: rgba(58, 42, 12, 0.5); }
+  .enemy-intent.intent-mend   { border-color: #347b58; color: #7fd4a0; background: rgba(14, 44, 30, 0.5); }
+  @keyframes gf-intent-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) { .enemy-intent.intent-unleash { animation: none; } }
 
   /* Floating damage numbers */
   .damage-pop {
@@ -1616,6 +1637,83 @@ const ENEMIES = [
     desc:'It signed your name first.', boss:true },
 ];
 
+/* ----- 2b. ENEMY INTENT (Batch B) -----
+   Every player turn the enemy LOCKS and SHOWS its next action, flavored by its
+   element tag, so each turn is a readable decision instead of an invisible flat
+   tax. PURE + deterministic (seeded by encIdx*5237 + turnInEnc — a prime ≠ the
+   cast seed 7919), no DOM — so sim-run.js calls the SAME lockIntent/executeIntent
+   and the balance + determinism asserts hold. Expected damage/turn ≈ the old
+   flat threat, so a no-Sigil run takes about the same total (Free baseline kept).
+     attack  — strike for ~threat (shown as a number)
+     charge  — wind up (chip now) then a telegraphed UNLEASH (~1.6× threat) next turn
+     mend    — heal itself a little and strike softly (drag the fight out)
+   Each enemy tag rolls from its own table, so the 8 once-inert element tags now
+   give every foe a distinct rhythm. */
+const INTENT_TABLES = {
+  shadow:  [['attack',0.75],['charge',0.20],['mend',0.05]],  // Cinder — relentless
+  air:     [['attack',0.82],['charge',0.13],['mend',0.05]],  // Wisp — quick jabs
+  earth:   [['attack',0.55],['charge',0.45]],                // Fenmote — slow, heavy windups
+  void:    [['attack',0.70],['charge',0.16],['mend',0.14]],  // Wight / Sovereign — drains life
+  water:   [['attack',0.62],['charge',0.10],['mend',0.28]],  // Sirenshade — regenerates
+  order:   [['attack',0.66],['charge',0.34]],                // Brass Revenant — metronomic
+  chaos:   [['attack',0.50],['charge',0.30],['mend',0.20]],  // Glass Wyrm — erratic
+  default: [['attack',0.80],['charge',0.15],['mend',0.05]],
+};
+function intentEnemy(run){ return ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId); }
+// Lock the action the enemy will take on the UPCOMING player turn (and show it).
+function lockIntent(run){
+  const enemy = intentEnemy(run);
+  const t = run.currentThreat || enemy.threat;
+  const recoil = (run.relics && run.relics.includes('final-page')) ? 2 : 0;  // glass-cannon tax
+  run.turnInEnc = (run.turnInEnc || 0) + 1;
+  // A charge always resolves into a telegraphed UNLEASH on the following turn.
+  if(run.pendingUnleash){
+    run.pendingUnleash = false;
+    run.intent = { kind:'unleash', dmg: Math.round(t*1.6) + recoil };
+    return run.intent;
+  }
+  const rng = mulberry32((run.rngSeed||0) + run.encounterIdx*5237 + run.turnInEnc);
+  const table = INTENT_TABLES[enemy.tag] || INTENT_TABLES.default;
+  let roll = rng(), kind = 'attack';
+  for(const [k,w] of table){ if(roll < w){ kind = k; break; } roll -= w; }
+  if(kind === 'charge'){
+    run.pendingUnleash = true;
+    run.intent = { kind:'charge', dmg: Math.round(t*0.4) + recoil };       // chip while winding up
+  } else if(kind === 'mend'){
+    // full strike AND heals — mend is added pressure ("don't let it stall"),
+    // not a breather, so it stays damage-neutral vs the old flat threat.
+    run.intent = { kind:'mend', heal: Math.max(2, Math.round(run.enemyMaxHp*0.06)), dmg: t + recoil };
+  } else {
+    run.intent = { kind:'attack', dmg: t + recoil };
+  }
+  return run.intent;
+}
+// Resolve the locked intent against the run (player HP / enemy HP). No DOM.
+function executeIntent(run){
+  const it = run.intent;
+  if(!it){ run.hp = Math.max(0, run.hp - (run.currentThreat||0)); return; }  // resumed-save fallback
+  if(it.kind === 'mend') run.enemyHp = Math.min(run.enemyMaxHp, run.enemyHp + (it.heal||0));
+  if(it.dmg) run.hp = Math.max(0, run.hp - it.dmg);
+}
+// Display model for the current intent (icon/label/colour/number).
+function intentView(run){
+  const it = run && run.intent;
+  if(!it){ const d = run ? (run.currentThreat || (intentEnemy(run)||{}).threat || 1) : 1;
+           return { icon:'⚔', label:'ATTACK', cls:'attack', num:d, dmg:d }; }
+  if(it.kind==='charge')  return { icon:'⚡', label:'CHARGING…', cls:'charge',  num:null,        dmg:it.dmg };
+  if(it.kind==='unleash') return { icon:'✸', label:'UNLEASH',   cls:'unleash', num:it.dmg,      dmg:it.dmg };
+  if(it.kind==='mend')    return { icon:'✚', label:'MEND',      cls:'mend',    num:'+'+it.heal, dmg:it.dmg };
+  return { icon:'⚔', label:'ATTACK', cls:'attack', num:it.dmg, dmg:it.dmg };
+}
+function intentTip(run){
+  const it = run && run.intent;
+  if(!it) return 'The foe will strike next turn.';
+  if(it.kind==='charge')  return 'Winding up — it UNLEASHES a heavy blow next turn. Race it down, or brace.';
+  if(it.kind==='unleash') return `A heavy blow incoming: ${it.dmg} damage this turn.`;
+  if(it.kind==='mend')    return `It mends ${it.heal} of its wounds and strikes for ${it.dmg}. Don't let it stall.`;
+  return `It strikes for ${it.dmg} this turn.`;
+}
+
 /* ----- 3. COMBO NAMING -----
    The Codex names spells you've cast based on their composition.
    Hashes spell shape+element+rune-id signature. Some named "broken combos"
@@ -1852,6 +1950,11 @@ function ensureRunDepth(run){
   if(!_p._boundIds) _p._boundIds = [];
   if(!run.boundElements) run.boundElements = [];
   if(typeof run.castCount !== 'number') run.castCount = 0;
+  // Batch B: enemy-intent state (resumed pre-B saves backfill to a safe default;
+  // renderGame/executeIntent fall back to a flat strike until the next lock).
+  if(typeof run.turnInEnc !== 'number') run.turnInEnc = 0;
+  if(run.intent === undefined) run.intent = null;
+  if(typeof run.pendingUnleash !== 'boolean') run.pendingUnleash = false;
 }
 function sigilOf(run){ return SIGILS.find(s=>s.id===(run&&run.sigil))||SIGILS[0]; }
 /* Apprentice Inscription — onboarding scaffolding for the new-player cliff.
@@ -2084,6 +2187,10 @@ function startNewRun(seedStr, sigilId, asc){
     progression: { bound:[], revealed:[], prophecy:null, transmuted:[] },
     boundElements: [],
     castCount: 0,
+    // Batch B: enemy intent (beginEncounter locks turn 1's action)
+    turnInEnc: 0,
+    intent: null,
+    pendingUnleash: false,
   };
   state.run.progression.prophecy = prophecyPick(state.run, mulberry32(seed + 999));
   state.meta.runsAttempted += 1;
@@ -2107,6 +2214,10 @@ function beginEncounter(){
   run.spell = [null, null, null];
   run.burns = 0;
   run.stunNext = false;
+  // Batch B: fresh encounter → reset intent state (locked after the hand fills)
+  run.turnInEnc = 0;
+  run.intent = null;
+  run.pendingUnleash = false;
   // restore HP between encounters (the ink replenishes; less at high Ascension)
   if(run.encounterIdx > 0){
     run.hp = Math.min(run.maxHp, run.hp + (run.healAmt == null ? 8 : run.healAmt));
@@ -2115,6 +2226,7 @@ function beginEncounter(){
   while(run.hand.length < 5 && (run.deck.length > 0 || run.discard.length > 0)){
     drawOne();
   }
+  lockIntent(run);   // Batch B: telegraph the enemy's first action of the fight
   saveState();
   renderGame();
 }
@@ -2367,16 +2479,10 @@ function cast(){
 
 function enemyTurn(stunned){
   const run = state.run;
-  if(stunned){
-    setTimeout(()=>{ saveState(); renderGame(); }, 400);
-    return;
-  }
-  const enemy = ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId);
-  // simple attack: deal threat damage (Ascension may add +threat; +2 if the
-  // glass-cannon relic is bound)
-  let dmg = run.currentThreat || enemy.threat;
-  if(run.relics && run.relics.includes('final-page')) dmg += 2;
-  run.hp = Math.max(0, run.hp - dmg);
+  // Batch B: resolve the telegraphed intent the player saw this turn (a stun
+  // skips it — Quake "skips their next attack"), then lock & show the next one.
+  if(!stunned) executeIntent(run);
+  if(run.hp > 0) lockIntent(run);
   saveState();
   renderGame();
   if(run.hp <= 0){
@@ -2732,14 +2838,20 @@ function renderGame(){
   const portrait = document.getElementById('enemy-portrait');
   portrait.setAttribute('data-art-slot', `enemy-${enemy.id}`);
   portrait.setAttribute('data-glyph', enemy.glyph);
-  // Threat pips
+  // Batch B: enemy INTENT — telegraph what it will do this turn (icon + number),
+  // with magnitude pips. Tap the chip for an explanation (existing tip system).
   const threatMeter = document.getElementById('threat-meter');
-  threatMeter.innerHTML = '';
-  for(let i=0;i<5;i++){
-    const pip = document.createElement('div');
-    pip.className = 'threat-pip' + (i < enemy.threat ? ' active' : '');
-    threatMeter.appendChild(pip);
-  }
+  const iv = intentView(run);
+  const pipBase = Math.max(1, Math.round((enemy.threat || 1) * 0.6));
+  const pipN = Math.max(0, Math.min(5, Math.ceil((iv.dmg || 0) / pipBase)));
+  let pips = '';
+  for(let i=0;i<5;i++) pips += `<span class="threat-pip${i < pipN ? ' active' : ''}"></span>`;
+  threatMeter.innerHTML =
+    `<div class="enemy-intent intent-${iv.cls}" data-tip="${intentTip(run)}">` +
+      `<span class="ei-icon">${iv.icon}</span><span class="ei-label">${iv.label}</span>` +
+      (iv.num != null ? `<span class="ei-num">${iv.num}</span>` : '') +
+    `</div>` +
+    `<div class="threat-pips">${pips}</div>`;
 
   // Spell slots
   const slotsEl = document.getElementById('spell-slots');

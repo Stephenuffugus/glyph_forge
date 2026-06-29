@@ -16,7 +16,7 @@ const stubs = `
   const confirm = ()=>true;
 `;
 
-const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, onSpellBound, ensureRunDepth, RELICS, SIGILS, CHAMPIONS, TRANSMUTATIONS };})()`);
+const game = eval(`(function(){${stubs}${code}; return { state, RUNES, ENEMIES, NAMED_COMBOS, resolveSpell, mulberry32, findComboName, onSpellBound, ensureRunDepth, RELICS, SIGILS, CHAMPIONS, TRANSMUTATIONS, lockIntent, executeIntent };})()`);
 
 // Replicate run logic locally so we don't need DOM-touching functions.
 // grantRelics: optional array of relic ids force-bound at run start (relic matrix).
@@ -54,6 +54,8 @@ function newSim(seedStr, sigilId, grantRelics){
     champion: sg.champion ? { id: sg.champion, level:1, path:0 } : null,
     progression: { bound:[], revealed:[], prophecy:null, transmuted:[] },
     boundElements: [], castCount: 0,
+    // Batch B: enemy intent (mirrors startNewRun; beginEnc locks the first action)
+    turnInEnc: 0, intent: null, pendingUnleash: false,
     log: [], dmgLog: [], champPeakLevel: (sg.champion ? 1 : 0)
   };
 }
@@ -78,6 +80,10 @@ function beginEnc(run){
     run.hp = Math.min(run.maxHp, run.hp + 8);
   }
   while(run.hand.length < 5 && (run.deck.length > 0 || run.discard.length > 0)) draw(run);
+  // Batch B: reset + lock the first intent via the SHARED game code (no drift)
+  run.currentThreat = e.threat;
+  run.turnInEnc = 0; run.intent = null; run.pendingUnleash = false;
+  game.lockIntent(run);
 }
 
 function tryAllSpells(run){
@@ -163,9 +169,10 @@ function applyCast(run){
 }
 
 function enemyAttack(run, stunned){
-  if(stunned) return;
-  const enemy = game.ENEMIES.find(e=>e.id===run.path[run.encounterIdx].enemyId);
-  run.hp = Math.max(0, run.hp - enemy.threat);
+  // Batch B: identical to the real game's enemyTurn — resolve the telegraphed
+  // intent (stun skips it) then lock the next. Shared code = zero drift.
+  if(!stunned) game.executeIntent(run);
+  if(run.hp > 0) game.lockIntent(run);
 }
 
 function rewardChoice(run){

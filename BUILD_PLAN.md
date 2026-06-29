@@ -65,3 +65,8 @@ void was the most inflated, 67→37, because it leaned on hand-size mechanics.)
 - `singularity` (×hand size) / `pandemonium` (Σ hand basePower) top out weak in
   real play (hand shrinks to ~2 when you stage 3) — consider rescaling off
   `run.deck.length` during the final pass.
+- **The Final Page is a trap** (relic delta −28pts). The sim previously ignored
+  its hidden "+2 enemy damage/turn"; Batch B's shared `lockIntent` recoil now
+  models it, exposing the relic as net-negative for optimal play. Final pass:
+  surface the +2 in its description (Batch F) and/or re-cost it. Tidal Ledger
+  (+28) / Riptide Knot (+26) remain the top end of the spread.
