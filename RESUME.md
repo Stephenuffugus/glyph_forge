@@ -1,34 +1,51 @@
 # RESUME — pick up here the moment you say "lets get started"
 
-## ★ LATEST (2026-06-29): COMBAT-DEPTH OVERHAUL on branch `combat-depth-overhaul`
-A full audit + competition-research pass (Balatro / Slay the Spire / Monster
-Train / Into the Breach) found the core problem: a deep, juicy scoring ENGINE
-with almost no GAME around it — the enemy was a flat damage-clock and the XMULT
-math was invisible. Six tested batches (A-F) on the branch fixed that. See
-**BUILD_PLAN.md** for the full plan + the v1.1 backlog. Shipped:
-- **Telegraphed enemy intent** — every turn the foe shows ATTACK n / CHARGING→
-  UNLEASH / MEND, flavored by element tag. Every turn is now a decision.
-- **Armor + pierce** (tier-3 + boss) — revived the dead `ignoreWard`/`trueDamage`
-  plumbing (Hollow/Eclipse/Storm Sigil finally matter).
-- **Legible engine** — live `POWER → ×XMULT [reasons] → ×fluency = N` breakdown
-  under the gold number; XMULT defined. The #1 retention fix.
-- **A real 3-phase Sovereign** that reads your dominant element and counters it
-  (telegraphed), with a harder "final verse".
-- **Forget-a-Glyph** deck-thinning + visible **transmutation chase** + **win-free
-  Mastery goals** (Detonator / Alchemist / Wayfarer).
+## ★ b17 COMBAT-DEPTH OVERHAUL — MERGED + LIVE (2026-06-29)
+Everything committed, merged to `main`, pushed, and **deployed live**. Verified:
+`https://stephenuffugus.github.io/glyph_forge/` serves `b17 combat-depth`.
+`node test.js` green · `node sim-run.js` 47.1% (band 30-55), all Sigils in band,
+**determinism PASS** · code-reviewed (zero bugs) · full 13-encounter browser
+playthrough clean. The audit (Balatro/StS/Monster Train) found the core problem:
+a deep scoring ENGINE with no GAME around it (flat-damage enemy, invisible
+XMULT). Six tested batches A-F fixed it — full plan + v1.1 backlog in
+**BUILD_PLAN.md**. What's new this build:
+- **Telegraphed enemy intent** — ATTACK n / CHARGING→UNLEASH / MEND, per enemy.
+- **Armor + pierce** (tier-3 + boss) — revived Hollow/Eclipse/Storm Sigil.
+- **Legible engine** — live `POWER → ×XMULT [reasons] → ×fluency = N` readout.
+- **3-phase Sovereign** that reads & counters your dominant element.
+- **Forget-a-Glyph** deck-thin · **transmutation chase** chip · **win-free goals**.
 
-State: `node test.js` green, `node sim-run.js` overall **47.1%** (band 30-55),
-all Sigils in band, **determinism PASS**. Build stamp **`b17 combat-depth`**.
-**NOT yet merged/deployed** — I built on a branch and did NOT push to `main`
-(main auto-deploys live to GitHub Pages and you were mid-playtest). To go live:
-`git checkout main && git merge combat-depth-overhaul && git push` (PWA auto-
-updates within ~60s). Deferred (v1.1): full status system (Vulnerable/Weak/
-Poison), burn DoT, attrition/heal-cut, champion-path accumulate, relic re-tune.
+### ☐ PLAYTEST b17 TOMORROW (Pixel 9) — bring notes per item
+Pull-to-refresh; the title strip must read **`b17 combat-depth`** (else it's stale).
+- [ ] **Intent** — do ATTACK/CHARGING→UNLEASH/MEND read clearly? Do you find
+      yourself *deciding* (race the charge vs build) instead of auto-nuking?
+- [ ] **The breakdown line** under the gold number — is it legible on the phone?
+      Does watching `POWER → ×XMULT [3 Fire] → fluency` teach you the engine?
+- [ ] **Armor** (tier-3/boss show `⛊N`) — does the `−N armor` / `⛊ pierced!`
+      feedback make sense? Does it push you to hit bigger / use Hollow/Eclipse?
+- [ ] **The Sovereign** (the big one) — fair or a brick wall? It reads your most-
+      used element and shows `⟁ counters X` after 66% HP; does bringing a second
+      line feel possible & satisfying, or does it feel like a gotcha? (Tune target.)
+- [ ] **Forget a Glyph** (reward option) — useful? Did you excise a sealed dead-draw?
+- [ ] **Transmutation chase** (`⚗ name N/3` chip) — does it make you chase a triad?
+- [ ] **New goals** in the Codex (Detonator/Alchemist/Wayfarer) — reachable & motivating?
+- [ ] Overall: more fun / more to think about than b16? Anything that feels bad?
+
+### ☐ WORK QUEUE — when notes arrive (in order)
+1. **Triage b17 notes** → each a tested fix (gate every commit on `node test.js`
+   green with `&&`, then `node sim-run.js`). Likely first lever: **boss difficulty**
+   (the counter + armor + phase-3 escalation may be too steep — soften via the
+   `×0.6/×0.9` dampen, boss HP/armor, or gate the counter to higher Ascension).
+2. **v1.1 backlog** (BUILD_PLAN.md): full status system (Vulnerable/Weak/Poison),
+   burn DoT, attrition/heal-cut, champion-path accumulate, final relic/Sigil re-tune
+   (the sim's "tuning needed" = that known relic-spread debt, not a regression).
+3. Local Playwright UI-play harness exists for headless verify: `gf-*.mjs`
+   (gitignored; `NODE_PATH` not needed — run from repo root; chromium installed).
 
 ---
 
-> (Below: the prior phone-playtest checklist from the b16 session — still valid
-> for on-device testing once b17 is deployed.)
+> (Below: the prior b16 phone-playtest checklist — superseded by the b17 list
+> above, kept for reference.)
 
 > Paused mid playtest-iterate loop (user took a break). Everything
 > committed/pushed/saved, b16 live. Walk the two checklists below.
