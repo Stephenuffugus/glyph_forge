@@ -117,11 +117,22 @@ function tryAllSpells(run){
 function setSpell(run, indices){
   run.spell = [null, null, null];
   indices.forEach((handIdx, slot) => run.spell[slot] = run.hand[handIdx]);
+  run._stagedIdx = indices.slice();
 }
 
 function sim(run){
   game.state.run = run;
-  return game.resolveSpell();
+  // Mirror the REAL game: staging a rune SPLICES it out of run.hand
+  // (handleHandTap), so resolveSpell sees the *leftover* hand — not the full
+  // 5. Without this, hand-size mechanics (singularity ×hand, pandemonium sum
+  // of hand basePowers, Broken Hourglass) are measured on an inflated hand and
+  // every balance number drifts high. Exclude the staged indices, restore after.
+  const staged = run._stagedIdx || [];
+  const savedHand = run.hand;
+  if(staged.length){ run.hand = savedHand.filter((_, i) => !staged.includes(i)); }
+  const res = game.resolveSpell();
+  run.hand = savedHand;
+  return res;
 }
 
 function applyCast(run){
