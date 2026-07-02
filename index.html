@@ -1222,6 +1222,7 @@
       <button class="btn small" id="btn-daily">Daily Sigil</button>
       <button class="btn small" id="btn-howto">How to Play</button>
       <button class="btn small" id="btn-mute">🔊 Sound</button>
+      <button class="btn small" id="btn-sws-exit" style="min-height:44px">← All Sky Wolf games</button>
     </div>
     <a id="gf-itch-link" class="gf-itch-link" href="#" target="_blank" rel="noopener" hidden>Pay-what-you-want on itch.io ↗</a>
   </section>
@@ -1323,6 +1324,26 @@
 
 <!-- ============ TOOLTIP ============ -->
 <div class="tooltip" id="tooltip" style="display:none"></div>
+
+<script>
+/* ===== Sky Wolf Studios embed protocol =====
+   The portal (lucidwinds.com/portal/) frames games with ?embed=1 and
+   listens for {sws:'ready'} and {sws:'close'}.
+   Rules when embedded:
+     - NEVER history.back() or navigate location — an iframe with no
+       history entry goes blank (the black-screen bug).
+     - The in-game back/X returns to the game's OWN menu screen.
+     - Only the menu's explicit exit control calls SWS_EXIT(). */
+(function(){
+  var SWS_EMBED=/[?&]embed=1(&|$)/.test(location.search);
+  window.SWS_EMBED=SWS_EMBED;
+  window.SWS_EXIT=function(){
+    if(SWS_EMBED&&parent!==window){try{parent.postMessage({sws:'close'},'*');}catch(e){} return;}
+    location.href='https://lucidwinds.com/portal/';
+  };
+  if(SWS_EMBED&&parent!==window){try{parent.postMessage({sws:'ready'},'*');}catch(e){}}
+})();
+</script>
 
 <script>
 /* ================================================================
@@ -3773,6 +3794,8 @@ if(typeof document !== 'undefined' && typeof document.addEventListener === 'func
 document.getElementById('btn-codex').onclick = ()=>showScreen('codex-screen');
 document.getElementById('btn-codex-back').onclick = ()=>showScreen('title-screen');
 document.getElementById('btn-back-title').onclick = ()=>showScreen('title-screen');
+/* Sky Wolf embed protocol: the ONLY control that leaves the game. */
+document.getElementById('btn-sws-exit').onclick = ()=>window.SWS_EXIT();
 document.getElementById('btn-daily').onclick = ()=>{
   const today = new Date().toISOString().slice(0,10);
   startNewRun('daily-' + today);
@@ -3793,6 +3816,7 @@ document.getElementById('btn-guide-close').onclick = ()=>document.getElementById
    it). Silently no-ops where unsupported (iOS tab — there the home-screen
    install gives true fullscreen, manifest is already display:fullscreen). */
 function gfGoFullscreen(){
+  if(window.SWS_EMBED) return; /* portal iframe is already full-screen */
   if(document.fullscreenElement || document.webkitFullscreenElement) return;
   const el = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -3815,8 +3839,10 @@ document.getElementById('modal-bg').onclick = (e)=>{
 
 /* PWA install: register service worker + auto-apply new builds. When a new
    SW takes control (new deploy), reload once so the player always lands on
-   the latest — no manual cache clearing during playtest/iteration. */
-if(typeof navigator !== 'undefined' && navigator.serviceWorker){
+   the latest — no manual cache clearing during playtest/iteration.
+   Skipped when embedded (?embed=1): the portal owns caching there, and a
+   controllerchange reload inside the iframe = staleness/black-screen risk. */
+if(!window.SWS_EMBED && typeof navigator !== 'undefined' && navigator.serviceWorker){
   let _gfReloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', ()=>{
     if(_gfReloaded) return; _gfReloaded = true; location.reload();
